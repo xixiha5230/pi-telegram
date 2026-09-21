@@ -699,6 +699,7 @@ export interface TelegramInboundRouteRuntimeDeps<
   isIdle: (ctx: TContext) => boolean;
   hasPendingMessages: (ctx: TContext) => boolean;
   requestNewSession?: (source: unknown) => void;
+  requestSwitchSession?: (source: unknown, sessionPath: string) => void;
   compact: (
     ctx: TContext,
     callbacks: { onComplete: () => void; onError: (error: unknown) => void },
@@ -2043,6 +2044,15 @@ export function createTelegramInboundRouteRuntime<
       });
     assertExecutionCurrent();
     if (handledByNew) return;
+    const handledBySessions =
+      await Commands.handleTelegramSessionsCallback(query, {
+        answerCallbackQuery: deps.answerCallbackQuery,
+        editInteractiveMessage: deps.editInteractiveMessage ?? (async () => {}),
+        requestSwitchSession: deps.requestSwitchSession,
+        recordRuntimeEvent: deps.recordRuntimeEvent,
+      });
+    assertExecutionCurrent();
+    if (handledBySessions) return;
     const handledByCompact =
       await Commands.handleTelegramCompactConfirmationCallback(query, {
         ctx,
@@ -2229,6 +2239,7 @@ export function createTelegramInboundRouteRuntime<
     enqueueContinueTurn,
     compact: deps.compact,
     requestNewSession: deps.requestNewSession,
+    requestSwitchSession: deps.requestSwitchSession,
     allocateItemOrder: deps.bridgeRuntime.queue.allocateItemOrder,
     allocateControlOrder: deps.bridgeRuntime.queue.allocateControlOrder,
     appendControlItem: deps.queueMutationRuntime.append,

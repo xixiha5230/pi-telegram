@@ -19,6 +19,7 @@ import {
   type SessionCompactEvent,
   type SessionShutdownEvent,
   type SessionStartEvent,
+  type SessionInfo,
   type SlashCommandInfo,
   type UIPromptEndEvent,
   type UIPromptStartEvent,
@@ -38,12 +39,15 @@ export type {
   MessageEndEvent,
   SessionBeforeCompactEvent,
   SessionCompactEvent,
+  SessionInfo,
   SessionShutdownEvent,
   SessionStartEvent,
   SlashCommandInfo,
   UIPromptEndEvent,
   UIPromptStartEvent,
 };
+
+export { SessionManager } from "@earendil-works/pi-coding-agent";
 
 export interface SessionCompactFailedEvent {
   type: "session_compact_failed";

@@ -4,6 +4,9 @@
 
 ## Unreleased
 
+- `Session browsing`: Adds Pi-side `/projects`, `/sessions`, and `/open` commands plus a Telegram `/sessions` flow that lists recent sessions grouped by project path as inline buttons and switches the active session on tap.
+- `Session switch gateway`: The internal lifecycle gateway now accepts a typed `switch-session` request in addition to session replacement, letting Telegram commands and callbacks run `ctx.switchSession()` under the same durable-update authority and report one terminal result.
+
 ## 0.50.0: Internal lifecycle gateway and thinking cadence
 
 - `Internal lifecycle gateway`: Replaces the session-specific technical command with one `/telegram-internal` gateway for runtime-armed typed actions. Manual invocation performs no action and explains that the command cannot be run manually; settled `/new` replacement retains the same lifecycle and terminal-result guarantees.

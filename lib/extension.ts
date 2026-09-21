@@ -1022,6 +1022,39 @@ export default function (pi: Pi.ExtensionAPI) {
         throw new Error("A Telegram session replacement is already pending.");
       }
     },
+    requestSwitchSession(source, sessionPath) {
+      const updateId = Updates.getTelegramUpdateExecutionFence(source)?.updateId;
+      if (updateId === undefined) {
+        throw new Error("Telegram session switch requires durable update authority.");
+      }
+      const callbackMessage = source && typeof source === "object" && "message" in source
+        ? (source as { message?: unknown }).message
+        : source;
+      const messageTarget = callbackMessage as {
+        chat?: { id?: unknown };
+        message_id?: unknown;
+        message_thread_id?: unknown;
+      } | undefined;
+      const target = typeof messageTarget?.chat?.id === "number" &&
+          typeof messageTarget.message_id === "number"
+        ? {
+            chatId: messageTarget.chat.id,
+            messageId: messageTarget.message_id,
+            ...(typeof messageTarget.message_thread_id === "number"
+              ? { threadId: messageTarget.message_thread_id }
+              : {}),
+          }
+        : undefined;
+      if (!target) {
+        throw new Error("Telegram session switch target is unavailable.");
+      }
+      if (!sessionActionsRuntime.scheduleAfterUpdate(updateId, target, {
+        kind: "switch-session",
+        sessionPath,
+      })) {
+        throw new Error("A Telegram session action is already pending.");
+      }
+    },
     activeTurnRuntime,
     mediaGroupRuntime,
     textGroupRuntime,

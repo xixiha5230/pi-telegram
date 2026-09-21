@@ -165,6 +165,7 @@ Use these in the bot DM.
 | `/start` | Pair when needed and open the main operator menu |
 | `/name [Name]` | Set a manual Thread title immediately, or open rename/reset controls when Name is omitted |
 | `/new` | Start a new Pi session in the current classic chat or Thread after confirming the bridge is idle |
+| `/sessions` | List projects by path, then tap a session to switch the active session |
 | `/compact` | Confirm and run session compaction when safe |
 | `/next` | Dispatch the next queued turn, aborting first if needed |
 | `/continue` | Enqueue a priority continuation prompt |
@@ -186,6 +187,9 @@ Run these inside Pi.
 | `/telegram-connect [profile] as=Name` | Give a fresh Workspace Thread one unique capitalized Latin-word identity while connecting |
 | `/telegram-disconnect` | Confirm, then stop polling, release ownership, and delete this instance's Threaded Mode tab; graceful Pi quit always preserves restart ownership and independently deletes the tab only when automatic cleanup is enabled |
 | `/telegram-status` | Inspect connection, mode, separate polling/worker progress, journal depth, queue, transport, automatic retry state, and recent diagnostics |
+| `/projects` | Browse every Pi working directory (project) and its sessions, then switch the active session |
+| `/sessions` | Browse and switch sessions in the current project |
+| `/open <path\|id>` | Switch directly to a session JSONL path or session id |
 
 Named profile identifiers contain only lowercase ASCII letters and digits (maximum 32 characters); `default`, `main`, and `active` remain reserved. If graceful thread deletion was interrupted, a same-profile replacement reuses its still-active thread and cancels the superseded cleanup instead of deleting and recreating the tab during startup.
 

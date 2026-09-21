@@ -159,6 +159,7 @@ test("Command helpers expose Telegram bot command definitions", () => {
     },
     { command: "compact", description: "🗜 Compact current session" },
     { command: "new", description: "🆕 Start a new session" },
+    { command: "sessions", description: "📚 List or switch sessions" },
     {
       command: "continue",
       description: "▶️ Queue continue prompt",
@@ -252,9 +253,9 @@ test("Command helpers register extension Telegram bot commands when visible", as
   });
   assert.deepEqual(calls, [
     [
-      ...TELEGRAM_BOT_COMMANDS.slice(0, 5),
+      ...TELEGRAM_BOT_COMMANDS.slice(0, 6),
       { command: "fresh", description: "🆕 Start fresh" },
-      ...TELEGRAM_BOT_COMMANDS.slice(5),
+      ...TELEGRAM_BOT_COMMANDS.slice(6),
     ],
   ]);
   dispose();
