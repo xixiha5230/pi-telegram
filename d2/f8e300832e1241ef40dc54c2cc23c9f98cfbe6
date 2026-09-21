@@ -1,0 +1,53 @@
+lib/sessions.ts
+  s_1643ae90eac999::t_c4aa9bce76f73f 331-337,340
+  s_1643ae90eac999::t_13811700f0ba6d 1-12,25,117-118,133-186,194-212,220-330,338-339,341
+  s_1643ae90eac999::t_7caec4830e67ef 23-24,26,28-29,42,44-45,47-48,86-93,119-126,128-132,187-193
+  s_1643ae90eac999::t_25ac850effa3ff 13-22
+  s_1643ae90eac999::t_d9e54866232b6c 27,51-59
+  s_1643ae90eac999::t_844ff54a55cfcb 30-41,43,46,49-50,60-85,94-116
+  s_1643ae90eac999::t_e2a9c6dce5126c 127,213-219
+docs/public-api.md
+  s_1643ae90eac999::t_bddef289d34afd 46-48,58,67
+tests/commands.test.ts
+  s_1643ae90eac999::t_af744a9533897b 162,256,258
+lib/extension.ts
+  s_1643ae90eac999::t_dc61f9b96589af 1025-1057
+tests/index.test.ts
+  s_1643ae90eac999::t_dfbd16d6fa1138 90-92
+CHANGELOG.md
+  s_1643ae90eac999::t_9332e64c33a3fa 7-9
+lib/commands.ts
+  s_1643ae90eac999::t_6c6d99d4ebd2ba 1621-1642,1686-1698,1741-1780,2465-2467,2469,2471-2476
+  s_1643ae90eac999::t_e0061965a8609b 2443-2453
+  s_1643ae90eac999::t_6979039cb57751 25,27,29-30,35-37,1643-1685,1699-1740,2456,2464,2468,2470
+  s_1643ae90eac999::t_8389238107e1f7 2639,2755,2757-2763,2776,2834-2849,2856,2871,2901-2923,2926,2933,2937,2945-2946,2948-2950
+  s_1643ae90eac999::t_dd32534bce716d 24,32-34,38,682-698
+  s_1643ae90eac999::t_5ee857f8d7cba5 26,28,31,193,294-300,707,742,765-768,1234,1394,2020,2022-2023,2128,2417-2442,2454-2455,2457-2463,2477-2484
+  s_1643ae90eac999::t_1cd5b279727025 764,2021
+lib/routing.ts
+  s_1643ae90eac999::t_0d7ece957459dc 2047-2055
+  s_1643ae90eac999::t_4a20d0ecd1e0fb 702,2242
+tests/sessions.test.ts
+  s_1643ae90eac999::t_c5426d6befa358 1-105
+README.md
+  s_1643ae90eac999::t_43c4fee17f9351 168,190-192
+lib/pi.ts
+  s_1643ae90eac999::t_b7d974aaa55b76 22,42
+  s_1643ae90eac999::t_fba105ec3dbfbd 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "d2f8e300832e1241ef40dc54c2cc23c9f98cfbe6",
+  "prompts": {},
+  "sessions": {
+    "s_1643ae90eac999": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c34e-82da-775d-8629-13575d7c6e2b",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
