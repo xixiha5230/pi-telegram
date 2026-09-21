@@ -1,5 +1,5 @@
 {
-  "name": "@llblab/pi-telegram",
+  "name": "@xixiha5230/pi-telegram",
   "version": "0.50.0",
   "private": false,
   "publishConfig": {
@@ -17,11 +17,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/llblab/pi-telegram.git"
+    "url": "git+https://github.com/xixiha5230/pi-telegram.git"
   },
-  "homepage": "https://github.com/llblab/pi-telegram",
+  "homepage": "https://github.com/xixiha5230/pi-telegram",
   "bugs": {
-    "url": "https://github.com/llblab/pi-telegram/issues"
+    "url": "https://github.com/xixiha5230/pi-telegram/issues"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -111,7 +111,7 @@
     "sourceSkills": [
       "./skills"
     ],
-    "image": "https://raw.githubusercontent.com/llblab/pi-telegram/main/screenshot.png"
+    "image": "https://raw.githubusercontent.com/xixiha5230/pi-telegram/main/screenshot.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": ">=0.84.4",
