@@ -21,6 +21,21 @@ import {
   type PendingTelegramControlItem,
   type TelegramQueueAdmissionReceipt,
 } from "./queue.ts";
+import {
+  formatTelegramPathLabel,
+  formatTelegramSessionList,
+  getTelegramSessionSurface,
+  listAllTelegramSessions,
+  rememberTelegramSessionSurface,
+  resolveTelegramProjectChoice,
+  resolveTelegramSessionChoice,
+  runTelegramOpenCommand,
+  runTelegramProjectsCommand,
+  runTelegramSessionsCommand,
+  type TelegramProjectChoice,
+  type TelegramSessionChoice,
+  type TelegramSessionSurface,
+} from "./sessions.ts";
 
 export interface ParsedTelegramCommand {
   name: string;
@@ -175,6 +190,7 @@ export const TELEGRAM_COMMAND_EMOJI = {
   stop: "🟥",
   name: "🏷️",
   new: "🆕",
+  sessions: "📚",
 } as const;
 
 export type TelegramCommandEmojiName = keyof typeof TELEGRAM_COMMAND_EMOJI;
@@ -273,6 +289,13 @@ export const TELEGRAM_BUILTIN_BOT_COMMANDS: readonly TelegramBotCommandDefinitio
       description: formatTelegramBotCommandDescription(
         "new",
         "Start a new session",
+      ),
+    },
+    {
+      command: "sessions",
+      description: formatTelegramBotCommandDescription(
+        "sessions",
+        "List or switch sessions",
       ),
     },
     {
@@ -656,12 +679,32 @@ export function registerTelegramBridgeCommands(
       }
     },
   });
+  pi.registerCommand("projects", {
+    description:
+      "Browse Pi projects (working directories) and their sessions",
+    handler: async (_args, ctx) => {
+      await runTelegramProjectsCommand(ctx);
+    },
+  });
+  pi.registerCommand("sessions", {
+    description: "Browse and switch sessions in the current project",
+    handler: async (_args, ctx) => {
+      await runTelegramSessionsCommand(ctx);
+    },
+  });
+  pi.registerCommand("open", {
+    description: "Switch to a session by path or session id: /open <path|id>",
+    handler: async (args, ctx) => {
+      await runTelegramOpenCommand(args, ctx);
+    },
+  });
 }
 
 export const TELEGRAM_RESERVED_COMMAND_NAMES = [
   "stop",
   "name",
   "new",
+  "sessions",
   "abort",
   "next",
   "continue",
@@ -696,6 +739,7 @@ export type TelegramCommandAction =
   | { kind: "stop"; executionMode: "immediate" }
   | { kind: "name"; executionMode: "immediate" }
   | { kind: "new"; executionMode: "immediate" }
+  | { kind: "sessions"; executionMode: "immediate" }
   | { kind: "abort"; executionMode: "immediate" }
   | { kind: "next"; executionMode: "immediate" }
   | { kind: "continue"; executionMode: "immediate" }
@@ -717,6 +761,11 @@ export interface TelegramCommandActionDeps<TMessage, TContext> {
   handleStop: (message: TMessage, ctx: TContext) => Promise<void>;
   handleName: (message: TMessage, ctx: TContext, name: string) => Promise<void>;
   handleNew: (message: TMessage, ctx: TContext) => Promise<void>;
+  handleSessions?: (
+    message: TMessage,
+    ctx: TContext,
+    args: string,
+  ) => Promise<void>;
   handleAbort: (message: TMessage, ctx: TContext) => Promise<void>;
   handleNext: (message: TMessage, ctx: TContext) => Promise<void>;
   handleContinue: (message: TMessage, ctx: TContext) => Promise<void>;
@@ -1182,6 +1231,7 @@ export interface TelegramCommandRuntimeDeps<
   stopTypingLoop?: () => void;
   enqueueContinueTurn: (message: TMessage, ctx: TContext) => Promise<void>;
   requestNewSession?: (message: TMessage) => void;
+  requestSwitchSession?: (message: TMessage, sessionPath: string) => void;
   compact: (
     ctx: TContext,
     callbacks: { onComplete: () => void; onError: (error: unknown) => void },
@@ -1341,6 +1391,7 @@ export const TELEGRAM_COMMAND_ACTIONS = {
   stop: { kind: "stop", executionMode: "immediate" },
   name: { kind: "name", executionMode: "immediate" },
   new: { kind: "new", executionMode: "immediate" },
+  sessions: { kind: "sessions", executionMode: "immediate" },
   abort: { kind: "abort", executionMode: "immediate" },
   next: { kind: "next", executionMode: "immediate" },
   continue: { kind: "continue", executionMode: "immediate" },
@@ -1564,6 +1615,166 @@ export async function handleTelegramNewConfirmationCallback<TContext>(
   await deps.answerCallbackQuery(query.id);
   await deps.deleteMessage(chatId, messageId);
   await deps.runNew(deps.ctx);
+  return true;
+}
+
+export const TELEGRAM_SESSIONS_CALLBACK_PREFIX = "tgsess:";
+
+export interface TelegramSessionsCallbackDeps {
+  answerCallbackQuery: (
+    callbackQueryId: string,
+    text?: string,
+  ) => Promise<void>;
+  editInteractiveMessage: (
+    chatId: number,
+    messageId: number,
+    text: string,
+    mode: "markdown" | "html" | "plain",
+    replyMarkup: TelegramCompactConfirmationReplyMarkup,
+  ) => Promise<void>;
+  requestSwitchSession?: (source: unknown, sessionPath: string) => void;
+  recordRuntimeEvent?: (
+    category: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ) => void;
+}
+
+function buildTelegramProjectListHtml(): string {
+  return formatTelegramInformationHeading("📚", "Projects — tap to open");
+}
+
+function buildTelegramProjectKeyboard(
+  surface: TelegramSessionSurface,
+): TelegramCompactConfirmationReplyMarkup {
+  return {
+    inline_keyboard: surface.projects.map((project) => [
+      {
+        text: `${formatTelegramPathLabel(project.cwd)} · ${project.sessionIndexes.length}`,
+        callback_data: `tgsess:p:${project.index}`,
+      },
+    ]),
+  };
+}
+
+function buildTelegramProjectSessionsHtml(
+  project: TelegramProjectChoice,
+): string {
+  return formatTelegramInformationHeading(
+    "📁",
+    `${formatTelegramPathLabel(project.cwd)} — tap a session to switch`,
+  );
+}
+
+function buildTelegramProjectSessionsKeyboard(
+  surface: TelegramSessionSurface,
+  project: TelegramProjectChoice,
+): TelegramCompactConfirmationReplyMarkup {
+  const rows = project.sessionIndexes
+    .map((index) => surface.sessions[index - 1])
+    .filter((choice): choice is TelegramSessionChoice => Boolean(choice))
+    .map((choice) => [
+      {
+        text: choice.shortLabel,
+        callback_data: `tgsess:s:${choice.index}`,
+      },
+    ]);
+  rows.push([{ text: "⬅️ Projects", callback_data: "tgsess:b" }]);
+  return { inline_keyboard: rows };
+}
+
+export async function handleTelegramSessionsCallback(
+  query: TelegramCompactConfirmationCallbackQuery,
+  deps: TelegramSessionsCallbackDeps,
+): Promise<boolean> {
+  if (!query.data?.startsWith(TELEGRAM_SESSIONS_CALLBACK_PREFIX)) return false;
+  const chatId = query.message?.chat?.id;
+  const messageId = query.message?.message_id;
+  if (typeof chatId !== "number" || typeof messageId !== "number") {
+    await deps.answerCallbackQuery(query.id, "⌛ Session list expired.");
+    return true;
+  }
+  const threadId = query.message?.message_thread_id;
+  const targetKey = `${chatId}:${typeof threadId === "number" ? threadId : 0}`;
+  const action = query.data.slice(TELEGRAM_SESSIONS_CALLBACK_PREFIX.length);
+  const surface = getTelegramSessionSurface(targetKey);
+  if (action === "b" || action.startsWith("p:")) {
+    if (!surface) {
+      await deps.answerCallbackQuery(
+        query.id,
+        "⌛ Session list expired. Send /sessions again.",
+      );
+      return true;
+    }
+    await deps.answerCallbackQuery(query.id);
+    if (action === "b") {
+      await deps.editInteractiveMessage(
+        chatId,
+        messageId,
+        buildTelegramProjectListHtml(),
+        "html",
+        buildTelegramProjectKeyboard(surface),
+      );
+      return true;
+    }
+    const project = resolveTelegramProjectChoice(targetKey, action.slice(2));
+    if (!project) {
+      await deps.editInteractiveMessage(
+        chatId,
+        messageId,
+        "<b>⚠️ Project list expired. Send /sessions again.</b>",
+        "html",
+        { inline_keyboard: [] },
+      );
+      return true;
+    }
+    await deps.editInteractiveMessage(
+      chatId,
+      messageId,
+      buildTelegramProjectSessionsHtml(project),
+      "html",
+      buildTelegramProjectSessionsKeyboard(surface, project),
+    );
+    return true;
+  }
+  const choice = resolveTelegramSessionChoice(targetKey, action.slice(2));
+  if (!choice) {
+    await deps.answerCallbackQuery(
+      query.id,
+      "⌛ Session list expired. Send /sessions again.",
+    );
+    return true;
+  }
+  if (!deps.requestSwitchSession) {
+    await deps.answerCallbackQuery(
+      query.id,
+      "🚫 Session switching is unavailable.",
+    );
+    return true;
+  }
+  await deps.answerCallbackQuery(query.id);
+  await deps.editInteractiveMessage(
+    chatId,
+    messageId,
+    `<b>🔀 Switching to ${escapeHtml(choice.shortLabel)}…</b>`,
+    "html",
+    { inline_keyboard: [] },
+  );
+  try {
+    deps.requestSwitchSession(query, choice.path);
+  } catch (error) {
+    deps.recordRuntimeEvent?.("telegram-command", error, {
+      command: "sessions",
+      phase: "switch",
+    });
+    await deps.editInteractiveMessage(
+      chatId,
+      messageId,
+      "<b>⚠️ Could not start the session switch. Try again.</b>",
+      "html",
+      { inline_keyboard: [] },
+    );
+  }
   return true;
 }
 
@@ -1806,6 +2017,10 @@ export async function executeTelegramCommandAction<TMessage, TContext>(
     case "new":
       await deps.handleNew(message, ctx);
       return true;
+    case "sessions":
+      if (!deps.handleSessions) return false;
+      await deps.handleSessions(message, ctx, commandArgs);
+      return true;
     case "abort":
       await deps.handleAbort(message, ctx);
       return true;
@@ -1910,6 +2125,7 @@ export function createTelegramCommandHandlerTargetRuntime<
     enqueueContinueTurn: deps.enqueueContinueTurn,
     compact: deps.compact,
     requestNewSession: deps.requestNewSession,
+    requestSwitchSession: deps.requestSwitchSession,
     sendInteractiveMessage: deps.sendInteractiveMessage,
     enqueueControlItem: commandTargetRuntime.enqueueControlItem,
     showStatus: commandTargetRuntime.showStatus,
@@ -2198,6 +2414,75 @@ async function handleTelegramCommandRuntime<
           recordRuntimeEvent: deps.recordRuntimeEvent,
         });
       },
+      handleSessions: async (nextMessage, _commandCtx, nextArgs) => {
+        const target = getTelegramCommandMessageTarget(nextMessage);
+        const targetKey = `${target.chatId}:${target.threadId ?? 0}`;
+        const selector = nextArgs.trim();
+        if (selector.length > 0) {
+          const choice = resolveTelegramSessionChoice(targetKey, selector);
+          if (!choice) {
+            await sendReplyFor(nextMessage)(
+              formatTelegramInformationHeading(
+                "⚠️",
+                "Unknown session number. Send /sessions to list sessions again.",
+              ),
+              { parseMode: "HTML" },
+            );
+            return;
+          }
+          if (!deps.requestSwitchSession) {
+            await sendReplyFor(nextMessage)(
+              formatTelegramInformationHeading(
+                "🚫",
+                "Session switching is unavailable in this Pi runtime.",
+              ),
+              { parseMode: "HTML" },
+            );
+            return;
+          }
+          try {
+            deps.requestSwitchSession(nextMessage, choice.path);
+          } catch {
+            await sendReplyFor(nextMessage)(
+              formatTelegramInformationHeading(
+                "⚠️",
+                "Could not start the session switch. Try again.",
+              ),
+              { parseMode: "HTML" },
+            );
+          }
+          return;
+        }
+        const sessions = (await listAllTelegramSessions()).slice(0, 100);
+        if (sessions.length === 0) {
+          await sendReplyFor(nextMessage)(
+            formatTelegramInformationHeading("📭", "No Pi sessions found."),
+            { parseMode: "HTML" },
+          );
+          return;
+        }
+        const surface = rememberTelegramSessionSurface(targetKey, sessions);
+        if (deps.sendInteractiveMessage) {
+          await deps.sendInteractiveMessage(
+            target.chatId,
+            buildTelegramProjectListHtml(),
+            "html",
+            buildTelegramProjectKeyboard(surface),
+            target.threadId !== undefined
+              ? { target: { chatId: target.chatId, threadId: target.threadId } }
+              : {},
+          );
+          return;
+        }
+        await sendReplyFor(nextMessage)(
+          formatTelegramInformationHeading(
+            "📚",
+            "Recent sessions (send /sessions <number> to switch)",
+          ) +
+            `\n\n${formatTelegramSessionList(sessions)}`,
+          { parseMode: "HTML" },
+        );
+      },
       handleCompact: async (nextMessage, commandCtx) => {
         if (deps.sendInteractiveMessage) {
           await openTelegramCompactConfirmation(
@@ -2351,6 +2636,7 @@ export interface TelegramSessionActionRuntimeDeps {
   notifyResult: (
     target: { chatId: number; threadId?: number; messageId: number },
     result: "success" | "cancelled" | "failure",
+    kind: "new" | "switch",
   ) => Promise<void>;
   prepareReplacement?: (
     ctx: Pi.ExtensionCommandContext,
@@ -2466,10 +2752,15 @@ export function createTelegramSessionActionAssembly(
   const sendTerminalResult = async (
     target: { chatId: number; threadId?: number },
     result: "success" | "cancelled" | "failure",
+    kind: "new" | "switch" = "new",
   ): Promise<void> => {
-    const text = result === "success" ? "<b>🆕 New session started.</b>"
-      : result === "cancelled" ? "<b>🚫 New session cancelled.</b>"
-      : "<b>⚠️ New session failed.</b>";
+    const text = kind === "switch"
+      ? result === "success" ? "<b>🔀 Session switched.</b>"
+        : result === "cancelled" ? "<b>🚫 Session switch cancelled.</b>"
+        : "<b>⚠️ Session switch failed.</b>"
+      : result === "success" ? "<b>🆕 New session started.</b>"
+        : result === "cancelled" ? "<b>🚫 New session cancelled.</b>"
+        : "<b>⚠️ New session failed.</b>";
     const deadline = now() + 10_000;
     do {
       const delivery = await deps.sendResult(target, text);
@@ -2482,7 +2773,7 @@ export function createTelegramSessionActionAssembly(
   const action = createTelegramSessionActionRuntime({
     registerCommand: deps.registerCommand,
     sendUserMessage: deps.sendUserMessage,
-    notifyResult(target, result) { return sendTerminalResult(target, result); },
+    notifyResult(target, result, kind) { return sendTerminalResult(target, result, kind); },
     async prepareReplacement(ctx, updateId, target) {
       await deps.store.load();
       const sessionId = ctx.sessionManager.getSessionId();
@@ -2540,17 +2831,29 @@ export function createTelegramSessionActionAssembly(
   return { action, settlement };
 }
 
-type TelegramPendingInternalAction = {
-  kind: "replace-session";
-  updateId: number;
-  target: { chatId: number; threadId?: number; messageId: number };
-};
+type TelegramPendingInternalRequest =
+  | { kind: "replace-session" }
+  | { kind: "switch-session"; sessionPath: string };
+
+type TelegramPendingInternalAction =
+  | {
+      kind: "replace-session";
+      updateId: number;
+      target: { chatId: number; threadId?: number; messageId: number };
+    }
+  | {
+      kind: "switch-session";
+      updateId: number;
+      target: { chatId: number; threadId?: number; messageId: number };
+      sessionPath: string;
+    };
 
 export interface TelegramSessionActionRuntime {
   register: () => void;
   scheduleAfterUpdate: (
     updateId: number,
     target: { chatId: number; threadId?: number; messageId: number },
+    request?: TelegramPendingInternalRequest,
   ) => boolean;
   onUpdateCompleted: (updateId: number) => void;
   hasPending: () => boolean;
@@ -2565,6 +2868,7 @@ export function createTelegramSessionActionRuntime(
     threadId?: number;
     messageId: number;
   } | undefined;
+  let pendingRequest: TelegramPendingInternalRequest | undefined;
   let pendingAction: TelegramPendingInternalAction | undefined;
   let registered = false;
 
@@ -2594,20 +2898,43 @@ export function createTelegramSessionActionRuntime(
               try {
                 await deps.prepareReplacement?.(ctx, action.updateId, action.target);
                 const result = await ctx.newSession();
-                if (result.cancelled) await deps.notifyResult(action.target, "cancelled");
+                if (result.cancelled) {
+                  await deps.notifyResult(action.target, "cancelled", "new");
+                }
               } catch (error) {
                 reportFailure(error);
-                await deps.notifyResult(action.target, "failure");
+                await deps.notifyResult(action.target, "failure", "new");
+              }
+              return;
+            case "switch-session":
+              try {
+                const result = await ctx.switchSession(action.sessionPath, {
+                  withSession: async (nextCtx) => {
+                    nextCtx.ui.notify(
+                      `Switched session: ${action.sessionPath}`,
+                      "info",
+                    );
+                  },
+                });
+                await deps.notifyResult(
+                  action.target,
+                  result.cancelled ? "cancelled" : "success",
+                  "switch",
+                );
+              } catch (error) {
+                reportFailure(error);
+                await deps.notifyResult(action.target, "failure", "switch");
               }
               return;
           }
         },
       });
     },
-    scheduleAfterUpdate(updateId, target) {
+    scheduleAfterUpdate(updateId, target, request) {
       if (pendingUpdateId !== undefined || pendingAction !== undefined) return false;
       pendingUpdateId = updateId;
       pendingTarget = { ...target };
+      pendingRequest = request ?? { kind: "replace-session" };
       return true;
     },
     onUpdateCompleted(updateId) {
@@ -2615,8 +2942,12 @@ export function createTelegramSessionActionRuntime(
       pendingUpdateId = undefined;
       const target = pendingTarget;
       pendingTarget = undefined;
+      const request = pendingRequest;
+      pendingRequest = undefined;
       if (!target) return;
-      pendingAction = { kind: "replace-session", updateId, target };
+      pendingAction = request?.kind === "switch-session"
+        ? { kind: "switch-session", updateId, target, sessionPath: request.sessionPath }
+        : { kind: "replace-session", updateId, target };
       void Promise.resolve()
         .then(() =>
           deps.sendUserMessage(`/${TELEGRAM_INTERNAL_COMMAND_NAME}`, {

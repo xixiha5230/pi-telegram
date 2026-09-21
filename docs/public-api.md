@@ -43,6 +43,9 @@ Stable commands inside Pi:
 - `/telegram-connect` — start polling here and acquire external Telegram control ownership. `/telegram-connect [profile] as=Name` assigns an optional unique capitalized Latin-word identity only when provisioning a fresh Workspace Thread. Accepted queue/reply state stays local if ownership later moves elsewhere. A successful command queues a hidden connection-state note for delivery with the agent's next turn without triggering one; it says Telegram is connected and that connectivity alone is not user intent.
 - `/telegram-disconnect` — after destructive confirmation, stop polling and release ownership without deleting or silencing accepted local queue state. A successful command queues the corresponding hidden, non-triggering disconnected context note; cancelled or failed disconnects do not publish a false state transition. In Threaded Mode it deletes this instance's current Telegram thread; a follower waits for its active leader to confirm generation-fenced cleanup before stopping. Graceful Pi `quit` performs the same teardown without prompting, while `reload`, `new`, `resume`, and `fork` preserve same-process handoff.
 - `/telegram-status` — show connection, polling, execution, queue, and recent event diagnostics; debug output separates poller and worker progress, durable automatic-retry state, exact foreign queued-owner identity, and negotiated protocol/build/capabilities.
+- `/projects` — browse every Pi working directory (project) and its sessions, then switch the active session.
+- `/sessions` — browse and switch sessions in the current project.
+- `/open <path|id>` — switch directly to a session JSONL path or session id.
 
 ### Telegram commands
 
@@ -52,6 +55,7 @@ Stable commands inside the paired Telegram DM:
 
 - `/start` — pair when needed and open the main application menu.
 - `/new` — after idle and empty-queue checks, request a new Pi session in the current classic chat or Thread. The bridge acknowledges the callback, deletes its confirmation, completes and removes the exact durable update, then dispatches one runtime-armed typed action through the internal `/telegram-internal` Pi gateway using `pi.sendUserMessage(..., { expandPromptTemplates: true })`. Manual invocation reports that the gateway cannot be run manually; the armed handler receives a real `ExtensionCommandContext` and calls `ctx.newSession()`; one discriminated durable intent preserves either exact classic Profile/CWD/session/chat continuity or the Thread binding with slot/name re-key. The successor CAS-claims that intent before sending one terminal result. Busy, identity-mismatch, and unavailable-host paths fail closed.
+- `/sessions` — list recent Pi sessions grouped by project path as inline buttons; tapping a session switches the active session through the same runtime-armed `/telegram-internal` gateway used by `/new`, armed with `ctx.switchSession(sessionPath)`. A text selector `/sessions <number>` remains available as a fallback. The list is capped and kept in memory per chat/thread; stale selections fail closed with a re-list instruction.
 - `/compact` — open confirmation and compact when idle.
 - `/next` — abort active work first when needed, let the interrupted prompt receive its abort notice, then reply `Dispatching next queued turn.` to the exact queued prompt selected for the next model turn. The command itself is never the lifecycle-notice reply target, and aborted pending assistant text is suppressed.
 - `/continue` — enqueue a priority `continue` prompt.
@@ -60,7 +64,7 @@ Stable commands inside the paired Telegram DM:
 
 Hidden compatibility shortcuts may open sections directly: `/help`, `/status`, `/model`, `/thinking`, `/queue`, and `/settings`.
 
-This command surface is a mobile companion subset, not a raw terminal-command bridge or session browser. A Telegram destination follows its assigned Pi instance and sends prompts into that instance's currently active session; it is not permanently bound to one session identity. Compaction and new-session replacement operate on the current session; resume, fork, tree navigation, session switching, TUI transcript clearing, and arbitrary slash-command dispatch stay out of the stable Telegram API unless Pi exposes safe public extension hooks for them.
+This command surface is a mobile companion subset, not a raw terminal-command bridge. A Telegram destination follows its assigned Pi instance and sends prompts into that instance's currently active session; it is not permanently bound to one session identity. `/sessions` switches the active session to another saved session by path. Compaction and new-session replacement operate on the current session; resume through other entry points, fork, tree navigation, TUI transcript clearing, and arbitrary slash-command dispatch stay out of the stable Telegram API unless Pi exposes safe public extension hooks for them.
 
 ### Tools and assistant-authored actions
 
