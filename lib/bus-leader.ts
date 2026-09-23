@@ -10,6 +10,7 @@ import {
   createTelegramThreadDisplayReconciler,
   resolveTelegramInitialWorkspaceDisplayName,
   resolveTelegramLiveWorkspaceBindingKeys,
+  resolveTelegramThreadLiveStates,
 } from "./thread-display.ts";
 import type { TelegramThreadDisplayMode } from "./config.ts";
 import * as ThreadReconciler from "./thread-reconciler.ts";
@@ -39,6 +40,7 @@ import {
   TELEGRAM_BUS_CAPABILITY_DURABLE_FOLLOWER_ADMISSION,
   TELEGRAM_BUS_CAPABILITY_QUEUE_HANDOFF,
   TELEGRAM_BUS_CAPABILITY_WORKSPACE_FOLLOWER_AUTO_CONNECT,
+  TELEGRAM_BUS_CAPABILITY_FOLLOWER_ACTIVITY,
   TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
   TELEGRAM_BUS_CAPABILITY_THREAD_DISPLAY_MODE,
   TELEGRAM_BUS_CAPABILITY_DIRECTORY_DISPLAY_FORMAT,
@@ -368,6 +370,21 @@ export function createTelegramBusLeaderRuntimeAssembly<TContext>(
       };
     },
     callApi: deps.callApi,
+    getLiveStates() {
+      return resolveTelegramThreadLiveStates({
+        bindings: deps.topicTargetStore.listWorkspaceBindings(),
+        followers: deps.runtime.followerRegistry.list().map((follower) => ({
+          target: follower.target,
+          state: follower.activity
+            ? {
+                isStreaming: follower.activity.streaming === true,
+                isCompacting: follower.activity.compacting === true,
+                pendingMessageCount: follower.activity.pending ?? 0,
+              }
+            : undefined,
+        })),
+      });
+    },
   }) : undefined;
   const reconcileThreadDisplayOperation = async () => {
     const result = await display!.reconcile();
@@ -405,7 +422,8 @@ export function createTelegramBusLeaderRuntimeAssembly<TContext>(
           throw new Error("Telegram Thread display setting requires current leader authority.");
         }
         const assertDisplayPeers = () => {
-          const requiredCapability = mode === "directory-snake" || mode === "directory-title"
+          const requiredCapability = mode === "directory-snake" || mode === "directory-title" ||
+        mode === "state"
             ? TELEGRAM_BUS_CAPABILITY_DIRECTORY_DISPLAY_FORMAT
             : TELEGRAM_BUS_CAPABILITY_THREAD_DISPLAY_MODE;
           if (mode !== "names" && deps.runtime.followerRegistry.list().some((follower) =>
@@ -1130,6 +1148,9 @@ export function createTelegramBusFollowerTargetProvisioner(
         const refreshedRecord = deps.topicTargetStore.upsert({
           ...reconnectRecord,
           instanceId: registration.instanceId,
+          ...(registration.processBirthId
+            ? { processBirthId: registration.processBirthId }
+            : {}),
           updatedAtMs: nowMs,
           lastSyncObservedAtMs: nowMs,
           lastReconcileAction: "follower-register-reuse",
@@ -1198,6 +1219,9 @@ export function createTelegramBusFollowerTargetProvisioner(
                     instanceId: registration.instanceId,
                   }
                 : {}),
+              ...(registration.processBirthId
+                ? { processBirthId: registration.processBirthId }
+                : {}),
               status: "active",
               updatedAtMs: getNowMs(),
               lastSyncObservedAtMs: getNowMs(),
@@ -1222,6 +1246,9 @@ export function createTelegramBusFollowerTargetProvisioner(
                       instanceId: registration.instanceId,
                     },
               instanceId: registration.instanceId,
+              ...(registration.processBirthId
+                ? { processBirthId: registration.processBirthId }
+                : {}),
               updatedAtMs: nowMs,
               lastSyncObservedAtMs: nowMs,
               lastReconcileAction: "follower-session-handoff",
@@ -1260,6 +1287,9 @@ export function createTelegramBusFollowerTargetProvisioner(
             if (recoverableTarget) {
               deps.topicTargetStore.upsert({
                 ...result.record,
+                ...(registration.processBirthId
+                  ? { processBirthId: registration.processBirthId }
+                  : {}),
                 status: "probe-required",
                 updatedAtMs: getNowMs(),
                 lastSyncError:
@@ -2313,11 +2343,11 @@ export function createTelegramBusLeaderEnvelopeHandler(deps: {
             if (
               !hasTelegramBusCapability(
                 deps.protocolIdentity,
-                TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
+  TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
               ) ||
               !hasTelegramBusCapability(
                 follower.protocol,
-                TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
+  TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
               ) ||
               !deps.renameFollowerThread
             ) {
@@ -2388,10 +2418,10 @@ export function createTelegramBusLeaderEnvelopeHandler(deps: {
             }
             if (!hasTelegramBusCapability(
               deps.protocolIdentity,
-              TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
+  TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
             ) || !hasTelegramBusCapability(
               follower.protocol,
-              TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
+  TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
             ) || !deps.resetFollowerThreadName) {
               return {
                 kind: "bus.ack" as const,
@@ -2503,9 +2533,18 @@ export function createTelegramBusLeaderEnvelopeHandler(deps: {
             message: "Stale Telegram bus follower registration generation.",
           };
         }
+        // Activity is used only from a peer that negotiated the capability; anything else keeps
+        // its directory title instead of being marked from unverified input.
+        const reportsActivity =
+          !!envelope.activity &&
+          hasTelegramBusCapability(
+            current.protocol,
+            TELEGRAM_BUS_CAPABILITY_FOLLOWER_ACTIVITY,
+          );
         const follower = deps.followerRegistry.heartbeat(
           envelope.instanceId,
           getNowMs(),
+          reportsActivity ? envelope.activity : undefined,
         );
         const displayTitle = follower ? deps.getFollowerDisplayTitle?.(follower) : undefined;
         return follower

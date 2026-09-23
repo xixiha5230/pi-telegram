@@ -141,10 +141,12 @@ export type TelegramThreadDisplayMode =
   | "names"
   | "directories"
   | "directory-snake"
-  | "directory-title";
+  | "directory-title"
+  /** Directory label prefixed with the bound worker's live state marker. */
+  | "state";
 
 const TELEGRAM_THREAD_DISPLAY_MODES: readonly TelegramThreadDisplayMode[] = [
-  "letters", "names", "directory-snake", "directory-title",
+  "letters", "names", "directory-snake", "directory-title", "state",
 ];
 
 export function resolveTelegramThreadDisplayMode(
@@ -217,6 +219,20 @@ export interface TelegramConfig {
   threads?: {
     /** Delete this instance's bound Telegram thread on graceful Pi quit. */
     automaticCleanup?: boolean;
+    /**
+     * Let the transport leader delete provably inactive Workspace Threads without
+     * an operator tap. Off by default: unattended deletion is an explicit decision.
+     */
+    unattendedCleanup?: boolean;
+  };
+  /**
+   * Cluster leadership policy. `auto` (default) keeps the historical behavior
+   * where any live instance may lead and followers may promote. `daemon` makes
+   * the external daemon the only leader: Pi instances never acquire transport
+   * ownership and never promote.
+   */
+  cluster?: {
+    leader?: "auto" | "daemon";
   };
   /** Canonical bot/session profiles, including profiles.default. */
   profiles?: Record<string, TelegramBotProfile>;
@@ -318,6 +334,23 @@ export function createTelegramActiveProfileKeyGetter(
   store: Pick<TelegramConfigStore, "getActiveProfileName">,
 ): () => string {
   return () => store.getActiveProfileName() ?? TELEGRAM_DEFAULT_PROFILE_NAME;
+}
+
+/**
+ * Whether this process may become the Telegram transport leader. When
+ * `cluster.leader` is `"daemon"`, leadership belongs only to the external
+ * daemon: Pi instances never acquire ownership and followers never promote.
+ */
+export function createTelegramClusterCanLeadGetter(
+  store: Pick<TelegramConfigStore, "get">,
+): () => boolean {
+  return () => store.get().cluster?.leader !== "daemon";
+}
+
+export function createTelegramClusterLeaderModeGetter(
+  store: Pick<TelegramConfigStore, "get">,
+): () => "auto" | "daemon" {
+  return () => (store.get().cluster?.leader === "daemon" ? "daemon" : "auto");
 }
 
 export interface TelegramConfigStoreOptions {
@@ -1227,6 +1260,41 @@ export function createTelegramAutomaticThreadCleanupResolver(
       );
     }
     return createTelegramAutomaticThreadCleanupChecker(configStore)();
+  };
+}
+
+export function createTelegramUnattendedThreadCleanupChecker(
+  configStore: Pick<TelegramConfigStore, "get">,
+): () => boolean {
+  return () => configStore.get().threads?.unattendedCleanup ?? false;
+}
+
+export function createTelegramUnattendedThreadCleanupResolver(
+  configStore: TelegramMutableConfigStore,
+): () => Promise<boolean> {
+  return async () => {
+    await loadLatestTelegramConfig(configStore);
+    if (configStore.didLastLoadRecoverInvalidConfig?.()) {
+      throw new Error(
+        "Thread cleanup setting is unavailable after invalid Telegram config recovery.",
+      );
+    }
+    return createTelegramUnattendedThreadCleanupChecker(configStore)();
+  };
+}
+
+export function createTelegramUnattendedThreadCleanupSetter(
+  configStore: TelegramMutableConfigStore,
+): (enabled: boolean) => Promise<void> {
+  return async (enabled) => {
+    await loadLatestTelegramConfig(configStore);
+    const current = configStore.get();
+    const config = {
+      ...current,
+      threads: { ...current.threads, unattendedCleanup: enabled },
+    };
+    configStore.set(config);
+    await configStore.persist(config);
   };
 }
 

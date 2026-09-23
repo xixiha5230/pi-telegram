@@ -127,6 +127,8 @@ export interface TelegramLeaderHealthRuntimeDeps<TSyncState> {
   callGetMe: () => Promise<unknown>;
   getSyncState: () => TSyncState;
   setSyncState: (state: TSyncState) => void;
+  /** Periodic dormant-binding sweep: records Workspace Threads whose owner is gone. */
+  sweepOrphanedBindings?: () => number;
   recordEvent: (
     category: string,
     message: unknown,
@@ -407,6 +409,9 @@ export function createTelegramLeaderHealthRuntime<
           if (generation !== expectedGeneration) return;
           try {
             markFresh();
+            // Recording dormant bindings here keeps every later cleanup pass able to see
+            // Threads whose owner disappeared while cleanup was switched off.
+            deps.sweepOrphanedBindings?.();
           } catch (stateError) {
             try {
               deps.recordEvent("telegram", stateError, {

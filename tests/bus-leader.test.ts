@@ -1037,7 +1037,9 @@ test(`Confirmed-dead cleanup preserves Workspace identity despite registration n
       threadName: "Cedar",
       slot: "C",
       inactiveSinceMs: 1000,
-      updatedAtMs: 500,
+      // Recording inactivity is a write: the update stamp moves with it, which is what
+      // keeps the binding eligible for proof-based cleanup.
+      updatedAtMs: 1000,
     });
 
     const reopenCalls: string[] = [];

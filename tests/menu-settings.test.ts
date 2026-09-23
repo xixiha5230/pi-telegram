@@ -56,9 +56,9 @@ test("Thread display Settings offer all automatic modes and gate mutation", asyn
   const classic = buildTelegramSettingsMenuReplyMarkup(true, "rich", "manual", "hidden");
   assert.equal(classic.inline_keyboard.flat().some((button) => button.callback_data === "settings:open:thread-display"), false);
   assert.deepEqual(getSettingsControlOrder(markup),
-    ["letters", "names", "directory-title", "directory-snake"]);
+    ["letters", "names", "directory-title", "directory-snake", "state"]);
   assert.deepEqual(markup.inline_keyboard.slice(1).map((row) => row[0].text),
-    ["🟢 letters", "names", "directory-title", "directory-snake"]);
+    ["🟢 letters", "names", "directory-title", "directory-snake", "state"]);
   const calls: string[] = [];
   let currentMode: TelegramThreadDisplayMode = "names";
   let renderedText = "";
@@ -144,8 +144,8 @@ test("Settings descriptions follow visible control order", () => {
 });
 
 test("Thread display detail follows the setting-card style and marks only the current option", () => {
-  const values = ["letters", "names", "directory-title", "directory-snake"] as const;
-  const labels = ["letters", "names", "directory-title", "directory-snake"] as const;
+  const values = ["letters", "names", "directory-title", "directory-snake", "state"] as const;
+  const labels = ["letters", "names", "directory-title", "directory-snake", "state"] as const;
   for (const mode of values) {
     const text = buildThreadDisplaySettingsText(mode);
     const label = labels[values.indexOf(mode)];
@@ -155,11 +155,11 @@ test("Thread display detail follows the setting-card style and marks only the cu
     assert.match(text, /Choose how this bot profile labels Telegram tabs and Pi terminal status\. Each slot is unique across this bot profile\./u);
     assert.match(text, /<code>letters<\/code> \(default\):/u);
     assert.doesNotMatch(text, /manual <code>\/name Name<\/code>/u);
-    for (const example of ["A", "B", "Anchor", "Briar", "api_tools", "frontend_extensions_a", "Api Tools", "Frontend \/ Extensions A"]) {
+    for (const example of ["A", "B", "Anchor", "Briar", "api_tools", "frontend_extensions_a", "Api Tools", "Frontend \/ Extensions A", "🟢 api_tools", "⏳ api_tools"]) {
       assert.match(text, new RegExp(`<b><i>${example}</i></b>`, "u"));
     }
     assert.doesNotMatch(text, /Switching changes labels only/u);
-    assert.ok(text.endsWith("frontend_extensions_a</i></b>."));
+    assert.ok(text.endsWith("while it is working."));
     const rows = buildThreadDisplaySettingsReplyMarkup(mode).inline_keyboard;
     assert.deepEqual(rows[0], [{ text: "⬆️ Back", callback_data: "settings:list" }]);
     assert.deepEqual(rows.slice(1).map((row) => row[0].text),

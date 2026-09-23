@@ -341,7 +341,7 @@ test("Entrypoint stays free of direct Node runtime imports", () => {
 });
 
 test("Production journal writers remain scoped or lifecycle-owned", () => {
-  const source = readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8");
+  const source = readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8");
   assert.equal((source.match(/binding\.journal\.appendBatch\(/gu) ?? []).length, 1);
   assert.match(source, /withTelegramResolvedUpdateJournalReference\(\{[\s\S]*?publishJournalCursor[\s\S]*?binding\.journal\.appendBatch/u);
   assert.match(source, /followerAdmissionLifecycleRuntime\.appendBatch\(updates\)/u);
@@ -349,7 +349,7 @@ test("Production journal writers remain scoped or lifecycle-owned", () => {
 });
 
 test("Production keeps custody cutover and operator authority disconnected", () => {
-  const source = readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8");
+  const source = readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8");
   for (const forbidden of [
     "acquireJournalWriterClosure",
     "installJournalWriterProtocolMode",
@@ -362,7 +362,7 @@ test("Production keeps custody cutover and operator authority disconnected", () 
 });
 
 test("Production journal resolver reads remain scoped or lifecycle-owned", () => {
-  const source = readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8");
+  const source = readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8");
   assert.doesNotMatch(source,
     /resolveTelegram\w*JournalBinding\(\)\?\.journal\.read/u);
   assert.ok((source.match(/withTelegramResolvedUpdateJournalReference\(/gu) ?? []).length >= 4);
@@ -370,9 +370,9 @@ test("Production journal resolver reads remain scoped or lifecycle-owned", () =>
   assert.match(source, /acquireSourceReference\(role, binding\)/u);
 });
 
-test("Extension composition stays free of local runtime adapters", () => {
+test("Bridge core assembly stays free of local runtime adapters", () => {
   const source = stripSourceTextAndComments(
-    readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8"),
+    readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8"),
   );
   const localFunctionDeclarations = [
     ...source.matchAll(/(?:^|\n)\s*(?:async\s+)?function\s+\w+/g),
@@ -407,7 +407,7 @@ test("Extension composition stays free of local runtime adapters", () => {
 
 test("Inbound composition projects live forwarding authority instead of raw message-cache records", () => {
   const source = stripSourceTextAndComments(
-    readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8"),
+    readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8"),
   );
   assert.match(source, /getMessageOwnership:\s*messageOwnershipRuntime\.getForwardOwnership/u);
   assert.doesNotMatch(source, /getMessageOwnership:\s*messageOwnershipRuntime\.store\.get/u);
@@ -438,7 +438,7 @@ test("Visible thread identity never falls back directly to bare slot labels", ()
 
 test("Automatic Workspace retirement stays disconnected from production composition", () => {
   const compositionSource = stripSourceTextAndComments(
-    readFileSync(join(PROJECT_ROOT, "lib/extension.ts"), "utf8"),
+    readFileSync(join(PROJECT_ROOT, "lib/bridge.ts"), "utf8"),
   );
   assert.match(
     compositionSource,

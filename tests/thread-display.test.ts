@@ -5,11 +5,14 @@ import {
   createTelegramThreadDisplayReconciler,
   createTelegramThreadDisplaySettingsRuntime,
   resolveTelegramInitialWorkspaceDisplayName,
+  resolveTelegramThreadLiveStates,
+  resolveTelegramThreadStateMarker,
   resolveTelegramWorkspaceDisplayNames,
   tokenizeTelegramDirectorySegment,
 } from "../lib/thread-display.ts";
 import { createTelegramTopicTargetStore, createTelegramWorkspaceBindingIdentity } from "../lib/threads.ts";
 import type { TelegramThreadDisplayMode } from "../lib/config.ts";
+import type { TelegramThreadLiveState } from "../lib/thread-display.ts";
 import type { TelegramApiCallOptions } from "../lib/telegram-api.ts";
 
 const bindings = [
@@ -142,7 +145,11 @@ test("Missing slots and ambiguous names do not fabricate a routable display iden
   ], "names").get("one"), "A");
 });
 
-function harness() {
+function harness(
+  options: {
+    liveStates?: () => ReadonlyMap<string, TelegramThreadLiveState>;
+  } = {},
+) {
   const store = createTelegramTopicTargetStore({ path: "/unused/state.json" });
   const identity = createTelegramWorkspaceBindingIdentity("/repo/extensions")!;
   store.upsertWorkspaceBinding({
@@ -189,6 +196,7 @@ function harness() {
       await state.onEdit?.();
       return true as TResponse;
     },
+    ...(options.liveStates ? { getLiveStates: options.liveStates } : {}),
   });
   return { store, state, ...reconciler };
 }
@@ -289,4 +297,63 @@ test("Thread display settings owner clears a retained manual override after mode
   await runtime.setMode("names");
   assert.deepEqual(calls, ["apply:names", "reset"]);
   assert.equal(runtime.isCustom(), false);
+});
+
+test("State mode projects the live worker marker ahead of the directory label", () => {
+  const peers = [{ bindingKey: "p", cwd: "/repo/plugins", slot: "A", threadName: "Anchor" }];
+  const live = new Set(["p"]);
+  const projected = (state?: { isStreaming?: boolean; isCompacting?: boolean; pendingMessageCount?: number }) =>
+    resolveTelegramWorkspaceDisplayNames(
+      peers,
+      "state",
+      live,
+      state ? new Map([["p", state]]) : new Map(),
+    ).get("p");
+  assert.equal(projected({ isStreaming: false }), "🟢 plugins");
+  assert.equal(projected({ isStreaming: true }), "⏳ plugins");
+  assert.equal(projected({ isCompacting: true }), "⏳ plugins");
+  assert.equal(projected({ pendingMessageCount: 1 }), "⏳ plugins");
+  assert.equal(projected(), "plugins");
+  assert.equal(projected({ isStreaming: true, pendingMessageCount: 0 }), "⏳ plugins");
+  // A manual Thread name still wins over any automatic projection.
+  const manual = [{ ...peers[0], manualThreadName: "Mine" }];
+  assert.equal(resolveTelegramWorkspaceDisplayNames(
+    manual, "state", live, new Map([["p", { isStreaming: true }]])).get("p"), "Mine");
+  // Markers reuse registered semantics and never invent one for unknown state.
+  assert.equal(resolveTelegramThreadStateMarker(undefined), "");
+  assert.equal(resolveTelegramThreadStateMarker({ isStreaming: false }), "🟢");
+  assert.equal(resolveTelegramThreadStateMarker({ isCompacting: true }), "⏳");
+});
+
+test("Follower activity is projected onto the binding it belongs to", () => {
+  const states = resolveTelegramThreadLiveStates({
+    bindings: [
+      { bindingKey: "b1", target: { chatId: 7, threadId: 42 } },
+      { bindingKey: "b2", target: { chatId: 7, threadId: 43 } },
+    ],
+    followers: [
+      { target: { chatId: 7, threadId: 42 }, state: { isStreaming: true } },
+      { target: { chatId: 7, threadId: 99 }, state: { isStreaming: true } },
+    ],
+  });
+  assert.deepEqual([...states.entries()], [["b1", { isStreaming: true }]]);
+});
+
+test("State mode marks a working Thread from reported follower activity", async () => {
+  let live: ReadonlyMap<string, TelegramThreadLiveState> = new Map();
+  const fixture = harness({ liveStates: () => live });
+  fixture.state.mode = "state";
+  // With no reported state the Thread keeps the plain directory title.
+  assert.deepEqual(await fixture.reconcile(), { changed: 1 });
+  assert.deepEqual(fixture.state.calls, ["extensions"]);
+  // A reported idle state adds the ready marker.
+  live = new Map([["--repo-extensions--", { isStreaming: false }]]);
+  assert.deepEqual(await fixture.reconcile(), { changed: 1 });
+  assert.deepEqual(fixture.state.calls, ["extensions", "🟢 extensions"]);
+  // Working marks the same Thread busy, and an unchanged refresh writes nothing.
+  live = new Map([["--repo-extensions--", { isStreaming: true }]]);
+  assert.deepEqual(await fixture.reconcile(), { changed: 1 });
+  assert.deepEqual(fixture.state.calls, ["extensions", "🟢 extensions", "⏳ extensions"]);
+  assert.deepEqual(await fixture.reconcile(), { changed: 0 });
+  assert.equal(fixture.state.calls.length, 3);
 });

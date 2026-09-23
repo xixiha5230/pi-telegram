@@ -16,6 +16,7 @@ import type {
   TelegramQueueHandoffPayload,
   TelegramQueueHandoffStageResult,
 } from "./queue.ts";
+import type { TelegramBusFollowerActivity } from "./bus.ts";
 import type { TelegramTarget } from "./target.ts";
 import {
   isTelegramApiMethodRetrySafe,
@@ -294,6 +295,11 @@ export interface TelegramBusFollowerRegistrationRuntimeDeps<
   getNowMs?: () => number;
   getPid?: () => number;
   getProcessBirthId?: () => string;
+  /**
+   * Live activity reported with each heartbeat so the leader can project `state` Thread titles.
+   * Sent only when this instance advertises the follower-activity capability.
+   */
+  getActivity?: () => TelegramBusFollowerActivity | undefined;
   getSessionId?: (ctx: TContext) => string | undefined;
   getSessionGeneration?: () => number;
   timeoutMs?: number;
@@ -1632,6 +1638,7 @@ export function createTelegramBusFollowerRegistrationRuntime<
     const leaderSocketPath = activeLeaderSocketPath;
     const registrationGeneration = activeRegistrationGeneration;
     const heartbeatContext = activeContext;
+    const heartbeatActivity = deps.getActivity?.();
     if (!leaderSocketPath || !registrationGeneration) return;
     const isCurrentHeartbeat = (): boolean =>
       activeLeaderSocketPath === leaderSocketPath &&
@@ -1651,6 +1658,7 @@ export function createTelegramBusFollowerRegistrationRuntime<
           auth: activeAuthSecret,
           instanceId: deps.instanceId,
           registrationGeneration,
+          ...(heartbeatActivity ? { activity: heartbeatActivity } : {}),
           sentAtMs: getNowMs(),
         },
       });
@@ -1918,7 +1926,8 @@ export function createTelegramBusFollowerRegistrationRuntime<
       if (!socketPath || !generation || !deps.registrationState?.isRegistered()) {
         throw new Error("Telegram follower is not registered with the leader.");
       }
-      const requiredCapability = mode === "directory-snake" || mode === "directory-title"
+      const requiredCapability = mode === "directory-snake" || mode === "directory-title" ||
+        mode === "state"
         ? TELEGRAM_BUS_CAPABILITY_DIRECTORY_DISPLAY_FORMAT
         : TELEGRAM_BUS_CAPABILITY_THREAD_DISPLAY_MODE;
       if (!hasTelegramBusCapability(deps.protocolIdentity, requiredCapability) ||

@@ -781,12 +781,18 @@ function getLockState(
 function ownsLockContext(
   lock: TelegramLockEntry | undefined,
   pid: number,
-  ctx?: TelegramLockContext,
 ): boolean {
-  if (!lock || lock.pid !== pid) return false;
-  return !lock.cwd || !ctx || lock.cwd === ctx.cwd;
+  if (!lock) return false;
+  return lock.pid === pid;
 }
 
+/**
+ * Transport ownership is a runtime identity, never a workspace identity.
+ * `cwd` is recorded only as a same-directory restart hint for automatic resume
+ * and must not participate in ownership, refresh, release, or generation
+ * fencing. Switching session or project inside one process therefore keeps
+ * ownership instead of being misread as a foreign live owner.
+ */
 function hasSameLockOwner(
   current: TelegramLockEntry | undefined,
   expected: TelegramLockEntry | undefined,
@@ -794,7 +800,6 @@ function hasSameLockOwner(
   if (!current || !expected) return false;
   return (
     current.pid === expected.pid &&
-    current.cwd === expected.cwd &&
     current.instanceId === expected.instanceId &&
     current.leaderEpoch === expected.leaderEpoch &&
     current.runtimeGeneration === expected.runtimeGeneration
@@ -804,15 +809,10 @@ function hasSameLockOwner(
 function canSupersedeSameProcessOwner(
   current: TelegramLockEntry,
   pid: number,
-  ctx: TelegramLockContext,
   instanceId: string | undefined,
   runtimeGeneration: number,
 ): boolean {
-  if (
-    current.pid !== pid ||
-    (current.cwd !== undefined && current.cwd !== ctx.cwd) ||
-    !instanceId
-  ) {
+  if (current.pid !== pid || !instanceId) {
     return false;
   }
   return (
@@ -887,12 +887,11 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
   const adoptCompatibleOwnedLock = (
     effectiveKey: string,
     lock: TelegramLockEntry | undefined,
-    ctx?: TelegramLockContext,
   ): TelegramLockEntry | undefined => {
     if (ownedLock) {
       return ownedLockKey === effectiveKey ? ownedLock : undefined;
     }
-    if (!ownsLockContext(lock, pid, ctx)) return undefined;
+    if (!ownsLockContext(lock, pid)) return undefined;
     if (
       (lock?.instanceId !== undefined &&
         lock.instanceId !== options.instanceId) ||
@@ -914,7 +913,6 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
         const expectedOwned = adoptCompatibleOwnedLock(
           effectiveKey,
           current,
-          ctx,
         );
         if (
           state.kind === "active-here" &&
@@ -953,7 +951,6 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
             canSupersedeSameProcessOwner(
               state.lock,
               pid,
-              ctx,
               options.instanceId,
               runtimeGeneration,
             ));
@@ -1026,13 +1023,13 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
       const exactOwner = adoptCompatibleOwnedLock(effectiveKey, lock);
       return hasSameLockOwner(lock, exactOwner) ? lock?.leaderEpoch : undefined;
     },
-    owns: (ctx) => {
+    owns: () => {
       if (deliveryRevoked) return false;
       const effectiveKey = resolveEffectiveKey();
       const lock = parseTelegramLockEntry(readLocks(locksPath)[effectiveKey]);
       return hasSameLockOwner(
         lock,
-        adoptCompatibleOwnedLock(effectiveKey, lock, ctx),
+        adoptCompatibleOwnedLock(effectiveKey, lock),
       );
     },
     commitIfOwned: (commit) =>
@@ -1055,7 +1052,7 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
       !deliveryRevoked && withLockTransaction(locksPath, (locks) => {
         const effectiveKey = resolveEffectiveKey();
         const lock = parseTelegramLockEntry(locks[effectiveKey]);
-        const expectedOwner = adoptCompatibleOwnedLock(effectiveKey, lock, ctx);
+        const expectedOwner = adoptCompatibleOwnedLock(effectiveKey, lock);
         if (!lock || !hasSameLockOwner(lock, expectedOwner)) {
           if (ownedLockKey === effectiveKey) {
             ownedLockKey = undefined;
@@ -1064,9 +1061,12 @@ export function createTelegramLockRuntime<TContext extends TelegramLockContext>(
           return { result: false, changed: false };
         }
         if (!options.instanceId) return { result: true, changed: false };
+        // Keep the restart hint aligned with the session's current project so a
+        // later same-directory session resume targets the right workspace.
+        const nextCwd = ctx?.cwd ?? lock.cwd;
         const refreshedLock: TelegramLockEntry = {
           pid: lock.pid,
-          ...(lock.cwd ? { cwd: lock.cwd } : {}),
+          ...(nextCwd ? { cwd: nextCwd } : {}),
           instanceId: options.instanceId,
           heartbeatMs: getNowMs(),
           leaderEpoch:
@@ -1144,6 +1144,11 @@ export interface TelegramLockedPollingRuntimeDeps<
 > {
   lock: TelegramLockRuntime<TContext>;
   hasBotToken: () => boolean;
+  /**
+   * Whether this process may acquire transport leadership. Defaults to true;
+   * `cluster.leader: "daemon"` returns false so Pi instances never lead.
+   */
+  canLead?: () => boolean;
   getBotTokenDiagnostic?: () => string | undefined;
   canStartPolling?: (ctx: TContext) => boolean;
   isContextCurrent?: (ctx: TContext) => boolean;
@@ -1192,6 +1197,7 @@ export function createTelegramLockedPollingRuntime<
   let pollingGeneration = 0;
   const ownershipCheckMs =
     deps.ownershipCheckMs ?? TELEGRAM_OWNERSHIP_CHECK_MS;
+  const canLead = () => deps.canLead?.() ?? true;
   const ownershipRefreshMs =
     deps.ownershipRefreshMs ?? TELEGRAM_OWNERSHIP_REFRESH_MS;
   const stopOwnershipWatcher = () => {
@@ -1326,6 +1332,42 @@ export function createTelegramLockedPollingRuntime<
         (deps.isContextCurrent?.(ctx) ?? true);
       if (ownershipStop) await ownershipStop;
       if (!isCurrent()) return cancelled;
+      if (!canLead()) {
+        // Daemon-managed cluster: never acquire or elect. Release any stale
+        // self-owned slot and register as a follower of the live daemon.
+        if (options.election) {
+          return {
+            ok: false,
+            canTakeover: false,
+            message: "Telegram leadership is restricted to the daemon.",
+          };
+        }
+        const state = deps.lock.getState();
+        if (state.kind === "active-here") deps.lock.release();
+        if (state.kind === "active-elsewhere" && deps.registerFollowerWithOwner) {
+          try {
+            const registered = await deps.registerFollowerWithOwner(
+              ctx,
+              state.lock,
+            );
+            if (!isCurrent()) return cancelled;
+            if (registered) {
+              deps.updateStatus(ctx);
+              return { ok: true, canTakeover: false };
+            }
+          } catch (error) {
+            deps.recordRuntimeEvent?.("bus", error, {
+              phase: "daemon-only-follower-register",
+            });
+          }
+        }
+        return {
+          ok: false,
+          canTakeover: false,
+          message:
+            "Telegram is daemon-managed; start pi-telegram-daemon to connect.",
+        };
+      }
       let acquired = deps.lock.acquire(ctx, {
         force: options.force,
         expectedOwner:
@@ -1460,13 +1502,33 @@ export function createTelegramLockedPollingRuntime<
     onSessionStart: async (_event, ctx) => {
       if (!deps.hasBotToken()) return;
       if (!canStartPolling(ctx)) return;
+      if (!canLead()) {
+        // Daemon-managed cluster: stay passive. Release a stale self-owned slot
+        // and restore a remembered follower binding when a live daemon exists.
+        const state = deps.lock.getState();
+        if (state.kind === "active-here") deps.lock.release();
+        if (
+          state.kind === "active-elsewhere" &&
+          deps.restoreFollowerWithOwner
+        ) {
+          try {
+            const restored = await deps.restoreFollowerWithOwner(ctx, state.lock);
+            if (restored) deps.updateStatus(ctx);
+          } catch (error) {
+            deps.recordRuntimeEvent?.("bus", error, {
+              phase: "daemon-only-follower-restore",
+            });
+          }
+        }
+        return;
+      }
       const ownsCurrentLock = deps.lock.owns(ctx);
       const state = ownsCurrentLock ? undefined : deps.lock.getState();
       const canResumeStaleSameCwd =
         state?.kind === "stale" && state.lock.cwd === ctx.cwd;
-      const canHandoffSameProcess =
-        state?.kind === "active-here" &&
-        (!state.lock.cwd || state.lock.cwd === ctx.cwd);
+      // Same process, same or newer runtime generation: ownership follows the
+      // runtime, not the workspace, so a session/project switch is a resume.
+      const canHandoffSameProcess = state?.kind === "active-here";
       const canRestoreRememberedFollower =
         state?.kind === "active-elsewhere" &&
         deps.restoreFollowerWithOwner !== undefined;

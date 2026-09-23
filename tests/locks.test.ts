@@ -2711,3 +2711,280 @@ test("Locked polling runtime does not claim stale ownership from another cwd dur
     rmSync(temp.dir, { recursive: true, force: true });
   }
 });
+
+test("Lock runtime keeps same-process ownership across a workspace change", () => {
+  const temp = createTempLockPath();
+  try {
+    const lock = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      instanceId: "10:runtime",
+      mintLeaderEpoch: () => "epoch",
+    });
+    assert.equal(lock.acquire({ cwd: "/project-a" }).ok, true);
+    const epoch = lock.getOwnedLeaderEpoch();
+    // A session/project switch stays the same transport owner; cwd is only a
+    // restart hint and must not fence ownership.
+    assert.equal(lock.owns({ cwd: "/project-b" }), true);
+    assert.equal(lock.refresh({ cwd: "/project-b" }), true);
+    assert.equal(lock.getOwnedLeaderEpoch(), epoch);
+    const persisted = readLocks(temp.path)[TELEGRAM_LOCK_KEY] as Record<
+      string,
+      unknown
+    >;
+    assert.equal(persisted.pid, 10);
+    assert.equal(persisted.cwd, "/project-b");
+    assert.equal(persisted.instanceId, "10:runtime");
+    assert.equal(lock.release().kind, "active-here");
+    assert.deepEqual(readLocks(temp.path), {});
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Lock runtime supersedes a same-process pre-reload owner across a workspace change", () => {
+  const temp = createTempLockPath();
+  try {
+    writeLocks(temp.path, {
+      [TELEGRAM_LOCK_KEY]: {
+        pid: 10,
+        cwd: "/project-a",
+        instanceId: "10:old",
+        heartbeatMs: Date.now(),
+        leaderEpoch: "old-epoch",
+        runtimeGeneration: 1,
+      },
+    });
+    const replacement = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      instanceId: "10:new",
+      runtimeGeneration: 2,
+      mintLeaderEpoch: () => "new-epoch",
+    });
+    const expectedOwner = readLocks(temp.path)[
+      TELEGRAM_LOCK_KEY
+    ] as TelegramLockEntry;
+    const acquired = replacement.acquire(
+      { cwd: "/project-b" },
+      { force: true, expectedOwner },
+    );
+    assert.equal(acquired.ok, true);
+    if (!acquired.ok) return;
+    assert.equal(acquired.lock.cwd, "/project-b");
+    assert.equal(acquired.lock.instanceId, "10:new");
+    assert.equal(acquired.lock.runtimeGeneration, 2);
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Locked polling runtime connects a same-process workspace change without follower registration", async () => {
+  const temp = createTempLockPath();
+  try {
+    const events: string[] = [];
+    let followerAttempts = 0;
+    const lock = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      instanceId: "10:runtime",
+      mintLeaderEpoch: () => "epoch",
+    });
+    assert.equal(lock.acquire({ cwd: "/project-a" }).ok, true);
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      startPolling: async () => {
+        events.push("start");
+      },
+      stopPolling: async () => {
+        events.push("stop");
+      },
+      updateStatus: () => {
+        events.push("status");
+      },
+      registerFollowerWithOwner: async () => {
+        followerAttempts += 1;
+        return false;
+      },
+    });
+
+    const result = await runtime.start({ cwd: "/project-b" });
+    assert.equal(result.ok, true);
+    assert.equal(followerAttempts, 0);
+    assert.deepEqual(events, ["start", "status"]);
+    const persisted = readLocks(temp.path)[TELEGRAM_LOCK_KEY] as Record<
+      string,
+      unknown
+    >;
+    assert.equal(persisted.pid, 10);
+    assert.equal(persisted.cwd, "/project-b");
+    assert.equal(persisted.instanceId, "10:runtime");
+    await runtime.stop();
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Locked polling runtime migrates a same-process workspace at session start", async () => {
+  const temp = createTempLockPath();
+  try {
+    const events: string[] = [];
+    const lock = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      instanceId: "10:runtime",
+      mintLeaderEpoch: () => "epoch",
+    });
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      startPolling: async () => {
+        events.push("start");
+      },
+      stopPolling: async () => {
+        events.push("stop");
+      },
+      updateStatus: () => {
+        events.push("status");
+      },
+      registerFollowerWithOwner: async () => {
+        assert.fail(
+          "A same-process workspace change must not register as a follower",
+        );
+      },
+    });
+
+    assert.equal((await runtime.start({ cwd: "/project-a" })).ok, true);
+    await runtime.suspend();
+    await runtime.onSessionStart({}, { cwd: "/project-b" });
+    await waitForCondition(
+      () => events.filter((event) => event === "start").length === 2,
+    );
+    const persisted = readLocks(temp.path)[TELEGRAM_LOCK_KEY] as Record<
+      string,
+      unknown
+    >;
+    assert.equal(persisted.cwd, "/project-b");
+    assert.equal(persisted.instanceId, "10:runtime");
+    await runtime.stop();
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Daemon-managed cluster refuses leadership and reports the daemon requirement", async () => {
+  const temp = createTempLockPath();
+  try {
+    const lock = createTelegramLockRuntime({ locksPath: temp.path, pid: 10 });
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      canLead: () => false,
+      startPolling: async () => assert.fail("Daemon-only must not start polling"),
+      stopPolling: async () => undefined,
+      updateStatus: () => undefined,
+    });
+    const result = await runtime.start({ cwd: "/repo" });
+    assert.equal(result.ok, false);
+    assert.match(result.message, /daemon-managed/u);
+    assert.deepEqual(readLocks(temp.path), {});
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Daemon-managed cluster registers as follower under a live owner without acquiring", async () => {
+  const temp = createTempLockPath();
+  try {
+    writeLocks(temp.path, {
+      [TELEGRAM_LOCK_KEY]: {
+        pid: 99,
+        cwd: "/other",
+        instanceId: "99:1",
+        heartbeatMs: Date.now(),
+      },
+    });
+    const lock = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      isProcessAlive: () => true,
+    });
+    let registered = 0;
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      canLead: () => false,
+      startPolling: async () => assert.fail("Daemon-only must not lead"),
+      stopPolling: async () => undefined,
+      updateStatus: () => undefined,
+      registerFollowerWithOwner: async () => {
+        registered += 1;
+        return true;
+      },
+    });
+    const result = await runtime.start({ cwd: "/repo" });
+    assert.equal(result.ok, true);
+    assert.equal(registered, 1);
+    const persisted = readLocks(temp.path)[TELEGRAM_LOCK_KEY] as Record<string, unknown>;
+    assert.equal(persisted.pid, 99);
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Daemon-managed cluster refuses follower promotion elections", async () => {
+  const temp = createTempLockPath();
+  try {
+    writeLocks(temp.path, {
+      [TELEGRAM_LOCK_KEY]: {
+        pid: 99,
+        cwd: "/other",
+        instanceId: "99:1",
+        heartbeatMs: 1,
+      },
+    });
+    const lock = createTelegramLockRuntime({
+      locksPath: temp.path,
+      pid: 10,
+      isProcessAlive: () => true,
+    });
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      canLead: () => false,
+      startPolling: async () => assert.fail("Daemon-only must not lead"),
+      stopPolling: async () => undefined,
+      updateStatus: () => undefined,
+    });
+    const expectedOwner = readLocks(temp.path)[TELEGRAM_LOCK_KEY] as TelegramLockEntry;
+    const result = await runtime.start(
+      { cwd: "/repo" },
+      { election: { expectedOwner } },
+    );
+    assert.equal(result.ok, false);
+    assert.match(result.message, /restricted to the daemon/u);
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});
+
+test("Daemon-managed cluster releases a self-owned slot at session start", async () => {
+  const temp = createTempLockPath();
+  try {
+    const lock = createTelegramLockRuntime({ locksPath: temp.path, pid: 10 });
+    assert.equal(lock.acquire({ cwd: "/repo" }).ok, true);
+    const runtime = createTelegramLockedPollingRuntime({
+      lock,
+      hasBotToken: () => true,
+      canLead: () => false,
+      startPolling: async () => assert.fail("Daemon-only must not lead"),
+      stopPolling: async () => undefined,
+      updateStatus: () => undefined,
+    });
+    await runtime.onSessionStart({}, { cwd: "/repo" });
+    assert.deepEqual(readLocks(temp.path), {});
+  } finally {
+    rmSync(temp.dir, { recursive: true, force: true });
+  }
+});

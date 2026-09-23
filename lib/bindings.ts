@@ -552,7 +552,7 @@ export function createTelegramActivityBindingRuntime<TTransportStamp>(deps: {
   };
 }
 
-interface TelegramCommandsAndToolsBindingDeps {
+export interface TelegramCommandsAndToolsBindingDeps {
   pi: Pi.ExtensionAPI;
   agentDir: string;
   configStore: Config.TelegramConfigStore;
@@ -828,7 +828,7 @@ export function registerTelegramCommandsAndTools({
   });
 }
 
-interface TelegramLifecycleBindingDeps {
+export interface TelegramLifecycleBindingDeps {
   pi: Pi.ExtensionAPI;
   publicationRuntime: TelegramBridgePublicationRuntime;
   activityRuntime: Activity.TelegramActivityRuntime;

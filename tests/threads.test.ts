@@ -22,6 +22,9 @@ import {
   createTelegramThreadName,
   createTelegramTopicTargetRenamer,
   createTelegramWorkspaceBindingIdentity,
+  collectTelegramOwnerProcessIdentities,
+  createTelegramWorkspaceOrphanSweepRuntime,
+  selectTelegramOrphanedWorkspaceBindingTargets,
   createTelegramWorkspaceDirectoryKey,
   createTelegramTopicTargetStore,
   findCurrentTelegramInstanceThreadRecord,
@@ -4922,4 +4925,281 @@ test("Thread store persists only current state statuses", async () => {
   } finally {
     await rm(dir, { force: true, recursive: true });
   }
+});
+
+test("Marking a Workspace binding inactive moves its update stamp with it", () => {
+  const store = createTelegramTopicTargetStore({ path: "/unused/state.json" });
+  const identity = createTelegramWorkspaceBindingIdentity("/repo/workspace");
+  assert.ok(identity);
+  store.upsertWorkspaceBinding({
+    ...identity,
+    target: { chatId: 7, threadId: 42 },
+    slot: "A",
+    threadName: "Anchor",
+    updatedAtMs: 500,
+  });
+  assert.equal(store.markWorkspaceBindingInactiveByTarget({ chatId: 7, threadId: 42 }, 1000), true);
+  const inactive = store.getWorkspaceBinding("/repo/workspace");
+  assert.equal(inactive?.inactiveSinceMs, 1000);
+  // Cleanup eligibility requires updatedAtMs >= inactiveSinceMs; a dormant record that
+  // keeps an older stamp can never be cleaned.
+  assert.equal(inactive?.updatedAtMs, 1000);
+  assert.equal(store.markWorkspaceBindingActiveByTarget({ chatId: 7, threadId: 42 }), true);
+  const active = store.getWorkspaceBinding("/repo/workspace");
+  assert.equal(active?.inactiveSinceMs, undefined);
+  assert.ok((active?.updatedAtMs ?? 0) >= 1000);
+});
+
+test("A legacy dormant record is repaired so cleanup eligibility can hold", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-telegram-threads-"));
+  const path = join(dir, "state.json");
+  const identity = createTelegramWorkspaceBindingIdentity("/repo/legacy");
+  assert.ok(identity);
+  // The retired shape: inactivity recorded without moving the update stamp.
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    workspaceBindings: [{
+      ...identity,
+      target: { chatId: 7, threadId: 42 },
+      slot: "A",
+      threadName: "Anchor",
+      inactiveSinceMs: 1000,
+      updatedAtMs: 500,
+    }],
+  }));
+  const store = createTelegramTopicTargetStore({ path });
+  await store.load();
+  const binding = store.getWorkspaceBinding("/repo/legacy");
+  assert.equal(binding?.inactiveSinceMs, 1000);
+  assert.equal(binding?.updatedAtMs, 1000);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("Only bindings whose owner is gone are selected as dormant", () => {
+  const binding = (threadId: number, extra: Record<string, unknown> = {}) => ({
+    cwd: `/repo/${threadId}`,
+    workspaceKey: `workspace:${threadId}`,
+    instanceSlot: "a",
+    bindingKey: `binding:${threadId}`,
+    target: { chatId: 7, threadId },
+    updatedAtMs: 100,
+    ...extra,
+  });
+  const selected = selectTelegramOrphanedWorkspaceBindingTargets({
+    bindings: [
+      binding(1),
+      binding(2),
+      binding(3),
+      binding(4),
+      binding(5, { inactiveSinceMs: 50 }),
+      binding(6),
+    ] as never,
+    records: [
+      { instanceId: "leader:1", status: "active", target: { chatId: 7, threadId: 1 } },
+      { instanceId: "gone:2", status: "active", target: { chatId: 7, threadId: 2 },
+        lastSyncObservedAtMs: 4_000 },
+      { instanceId: "gone:3", status: "active", target: { chatId: 7, threadId: 3 } },
+      { instanceId: "gone:4", status: "deleted", target: { chatId: 7, threadId: 4 } },
+      { instanceId: "gone:5", status: "active", target: { chatId: 7, threadId: 5 } },
+      { instanceId: "gone:6", status: "active", target: { chatId: 7, threadId: 6 } },
+    ],
+    liveInstanceIds: ["leader:1"],
+    liveTargets: [{ chatId: 7, threadId: 6 }],
+    competingTargets: [{ chatId: 7, threadId: 3 }],
+  });
+  // A live owner, a live follower target, a competing reservation, a retired record, and a
+  // binding that already recorded inactivity are all left alone.
+  assert.deepEqual(
+    selected.map((entry) => entry.target),
+    [{ chatId: 7, threadId: 2 }],
+  );
+  // Dormancy starts when the absent owner was last observed, not when we noticed.
+  assert.equal(selected[0]?.dormantSinceMs, 4_000);
+});
+
+test("The dormant sweep records an orphaned Workspace binding exactly once", async () => {
+  const sweepDir = await mkdtemp(join(tmpdir(), "pi-telegram-orphan-sweep-"));
+  const store = createTelegramTopicTargetStore({ path: join(sweepDir, "state.json") });
+  const identity = createTelegramWorkspaceBindingIdentity("/repo/orphan");
+  assert.ok(identity);
+  const target = { chatId: 7, threadId: 42 };
+  store.upsertWorkspaceBinding({
+    ...identity, target, slot: "A", threadName: "Anchor", updatedAtMs: 500,
+  });
+  store.upsert({
+    profileKey: "default",
+    owner: { kind: "manual-follower", instanceId: "gone:1" },
+    target,
+    status: "active",
+    syncStatus: "open",
+    createdAtMs: 500,
+    updatedAtMs: 500,
+    lastSyncObservedAtMs: 500,
+    instanceId: "gone:1",
+    slot: "A",
+  });
+  const sweep = createTelegramWorkspaceOrphanSweepRuntime({
+    instanceId: "leader:1",
+    listFollowers: () => [],
+    listBindings: store.listWorkspaceBindings,
+    listRecords: store.list,
+    listReservations: store.listReservations,
+    listPendingProvisions: store.listPendingProvisions,
+    listPendingCleanups: store.listPendingCleanups,
+    markInactive: store.markWorkspaceBindingInactiveByTarget,
+    persist: store.persist,
+    now: () => 1_000,
+  });
+  assert.equal(sweep.sweep(), 1);
+  const binding = store.getWorkspaceBinding("/repo/orphan");
+  // The record was last observed at 500, so dormancy is dated from there.
+  assert.equal(binding?.inactiveSinceMs, 500);
+  // Marking is idempotent: a second sweep has nothing left to record.
+  assert.equal(sweep.sweep(), 0);
+  // The sweep persists in the background, so the temp directory is left for the OS.
+});
+
+test("A live but unregistered Pi instance keeps its Thread", () => {
+  const binding = (threadId: number) => ({
+    cwd: `/repo/${threadId}`,
+    workspaceKey: `workspace:${threadId}`,
+    instanceSlot: "a",
+    bindingKey: `binding:${threadId}`,
+    target: { chatId: 7, threadId },
+    updatedAtMs: 100,
+  });
+  const selected = selectTelegramOrphanedWorkspaceBindingTargets({
+    bindings: [
+      { ...binding(1), journalBindingKeys: ["manual:4242:start:aa11bb"] },
+      { ...binding(2), journalBindingKeys: ["manual:5252:start:cc33dd"] },
+      { ...binding(3) },
+    ] as never,
+    records: [
+      { instanceId: "4242:1790000000000", status: "active", target: { chatId: 7, threadId: 1 } },
+      { instanceId: "5252:1790000000000", status: "active", target: { chatId: 7, threadId: 2 } },
+      {
+        instanceId: "6262:1790000000000",
+        owner: { kind: "manual-follower", instanceId: "6262:start:ee55ff" },
+        status: "active",
+        target: { chatId: 7, threadId: 3 },
+      },
+    ],
+    liveInstanceIds: [],
+    liveTargets: [],
+    getInstanceLiveness: (identity) =>
+      identity === "4242:start:aa11bb"
+        ? "alive"
+        : identity === "5252:start:cc33dd"
+          ? "dead"
+          : "unverifiable",
+    getInstancePidLiveness: (identity) =>
+      identity.startsWith("6262:") ? "alive" : "dead",
+  });
+  // The live process (4242) keeps its Thread even though it is not registered, and so does the
+  // live PID behind a birth-proof-less instance id (6262); the provably dead one (5252) becomes
+  // dormant.
+  assert.deepEqual(
+    selected.map((entry) => entry.target.threadId),
+    [2],
+  );
+});
+
+test("Owner process identities are read from records and journal keys", () => {
+  assert.deepEqual(
+    [...collectTelegramOwnerProcessIdentities({
+      instanceId: "4242:1790000000000",
+      ownerInstanceId: "5252:start:aa11bb",
+      journalBindingKeys: ["manual:6262:start:cc33dd", "profile:default:manual:7272:start:ee55ff"],
+      processBirthId: "8282:start:11aa22",
+    })].sort(),
+    [
+      "4242:1790000000000",
+      "5252:start:aa11bb",
+      "6262:start:cc33dd",
+      "7272:start:ee55ff",
+      "8282:start:11aa22",
+    ],
+  );
+});
+
+test("A record's persisted birth identity proves its owner alive without the registry", () => {
+  const binding = {
+    cwd: "/repo/birth",
+    workspaceKey: "workspace:birth",
+    instanceSlot: "a",
+    bindingKey: "binding:birth",
+    target: { chatId: 7, threadId: 9 },
+    updatedAtMs: 100,
+  };
+  const selected = selectTelegramOrphanedWorkspaceBindingTargets({
+    bindings: [binding] as never,
+    records: [{
+      instanceId: "9100:1790000000000",
+      processBirthId: "9100:start:ffeedd",
+      status: "active",
+      target: { chatId: 7, threadId: 9 },
+    }],
+    liveInstanceIds: [],
+    liveTargets: [],
+    // The recorded birth identity is exact, so an alive verdict protects the Thread even
+    // though the instance never appears in the follower registry.
+    getInstanceLiveness: (identity) => (identity === "9100:start:ffeedd" ? "alive" : "unverifiable"),
+    getInstancePidLiveness: () => "unverifiable",
+  });
+  assert.deepEqual(selected, []);
+});
+
+test("A Thread record keeps its owner birth identity across persistence", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-telegram-record-birth-"));
+  const path = join(dir, "state.json");
+  const store = createTelegramTopicTargetStore({ path });
+  store.upsert({
+    profileKey: "default",
+    owner: { kind: "manual-follower", instanceId: "9100:1790000000000" },
+    target: { chatId: 7, threadId: 9 },
+    status: "active",
+    syncStatus: "open",
+    createdAtMs: 100,
+    updatedAtMs: 100,
+    lastSyncObservedAtMs: 100,
+    instanceId: "9100:1790000000000",
+    processBirthId: "9100:start:ffeedd",
+    slot: "A",
+  });
+  await store.persist();
+  const reloaded = createTelegramTopicTargetStore({ path });
+  await reloaded.load();
+  const record = reloaded.list().find((entry) => entry.target.threadId === 9);
+  assert.equal(record?.processBirthId, "9100:start:ffeedd");
+});
+
+test("A retained binding whose record is gone is dormant too", () => {
+  const binding = (threadId: number, extra: Record<string, unknown> = {}) => ({
+    cwd: `/repo/${threadId}`,
+    workspaceKey: `workspace:${threadId}`,
+    instanceSlot: "a",
+    bindingKey: `binding:${threadId}`,
+    target: { chatId: 7, threadId },
+    updatedAtMs: 3_000,
+    ...extra,
+  });
+  const selected = selectTelegramOrphanedWorkspaceBindingTargets({
+    bindings: [
+      binding(11),                                  // no record at all → dormant
+      binding(12),                                  // record present but owned by a live instance
+      binding(13, { inactiveSinceMs: 100 }),        // already recorded
+      binding(14),                                  // a live target
+    ] as never,
+    records: [
+      { instanceId: "leader:1", status: "active", target: { chatId: 7, threadId: 12 } },
+    ],
+    liveInstanceIds: ["leader:1"],
+    liveTargets: [{ chatId: 7, threadId: 14 }],
+    nowMs: 5_000,
+  });
+  assert.deepEqual(
+    selected.map((entry) => entry.target.threadId),
+    [11],
+  );
+  assert.equal(selected[0]?.dormantSinceMs, 3_000);
 });

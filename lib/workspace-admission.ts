@@ -322,6 +322,14 @@ export interface TelegramWorkspaceAdmissionLedger {
     expected: TelegramWorkspaceRetirementFence,
   ) => boolean;
   releaseUnissuedThreadCleanupFence: TelegramWorkspaceAdmissionLedger["releaseUnissuedRetirementFence"];
+  /**
+   * Release a cleanup fence whose deletion attempt failed. Retrying `deleteForumTopic`
+   * is idempotent, but holding the fence blocks every profile admission — including the
+   * leader's own startup — so a provably failed deletion must not keep it.
+   */
+  releaseFailedThreadCleanupFence: (
+    expected: TelegramWorkspaceRetirementFence,
+  ) => boolean;
   completeRetirementFence: (
     expected: TelegramWorkspaceRetirementFence,
   ) => boolean;
@@ -1612,6 +1620,27 @@ export function createTelegramWorkspaceAdmissionLedger(
   function completeThreadCleanupFence(expected: TelegramWorkspaceRetirementFence) {
     return completeRetirementFence(expected, "manual-thread-cleanup");
   }
+  function releaseFailedThreadCleanupFence(expected: TelegramWorkspaceRetirementFence) {
+    validateExpectedFence(expected, options.profileKey);
+    if (resolveTelegramWorkspaceDestructiveFenceKind(expected) !== "manual-thread-cleanup")
+      authorityChanged("Telegram Workspace destructive fence kind changed.");
+    if (!areOwnersEqual(expected.owner, options.owner)) {
+      authorityChanged("Telegram Workspace fence release requires owner authority.");
+    }
+    return transact((state) => {
+      if (!state.fence) return { result: false, changed: false };
+      if (!isTelegramWorkspaceRetirementFence(state.fence))
+        authorityChanged("Telegram Workspace retirement fence has another kind.");
+      if (!areFencesEqual(state.fence, expected)) {
+        authorityChanged("Telegram Workspace retirement fence authority changed.");
+      }
+      if (state.fence.phase !== "deletion-issued") {
+        authorityChanged("Only a failed deletion attempt can be released.");
+      }
+      delete state.fence;
+      return { result: true, changed: true };
+    });
+  }
 
   return {
     getProfileKey: () => options.profileKey,
@@ -1637,6 +1666,7 @@ export function createTelegramWorkspaceAdmissionLedger(
     confirmThreadCleanupAbsence,
     releaseUnissuedRetirementFence,
     releaseUnissuedThreadCleanupFence,
+    releaseFailedThreadCleanupFence,
     completeRetirementFence,
     completeThreadCleanupFence,
   };

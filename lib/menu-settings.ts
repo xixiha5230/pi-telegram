@@ -191,6 +191,7 @@ export function buildThreadDisplaySettingsText(
     "<code>-</code> <code>names</code>: show the generated dictionary name for the slot, such as <b><i>Anchor</i></b> or <b><i>Briar</i></b>.",
     "<code>-</code> <code>directory-title</code>: humanize the distinguishing directory path, such as <b><i>Api Tools</i></b> or <b><i>Frontend / Extensions A</i></b>.",
     "<code>-</code> <code>directory-snake</code>: normalize the distinguishing directory path to lowercase, such as <b><i>api_tools</i></b> or <b><i>frontend_extensions_a</i></b>.",
+    "<code>-</code> <code>state</code>: the <code>directory-snake</code> label prefixed with the bound worker\'s live state, such as <b><i>🟢 api_tools</i></b> when ready or <b><i>⏳ api_tools</i></b> while it is working.",
   ].join("\n");
 }
 
@@ -428,6 +429,7 @@ function threadDisplayModeLabel(mode: TelegramThreadDisplayMode): string {
     case "names": return "names";
     case "directory-title": return "directory-title";
     case "directory-snake": return "directory-snake";
+    case "state": return "state";
     default: return "letters";
   }
 }
@@ -438,7 +440,7 @@ export function buildThreadDisplaySettingsReplyMarkup(
 ): TelegramSettingsMenuReplyMarkup {
   return { inline_keyboard: [
     [{ text: "⬆️ Back", callback_data: "settings:list" }],
-    ...(["letters", "names", "directory-title", "directory-snake"] as const).map((value) => [{
+    ...(["letters", "names", "directory-title", "directory-snake", "state"] as const).map((value) => [{
       text: `${!custom && mode === value ? "🟢 " : ""}${threadDisplayModeLabel(value)}`,
       callback_data: `settings:set:thread-display:${value}`,
     }]),
@@ -656,7 +658,8 @@ export async function handleTelegramSettingsMenuCallbackAction(
     if (data.startsWith("settings:set:thread-display:")) {
       const mode = data.slice("settings:set:thread-display:".length);
       if (mode !== "letters" && mode !== "names" &&
-          mode !== "directory-snake" && mode !== "directory-title") {
+          mode !== "directory-snake" && mode !== "directory-title" &&
+          mode !== "state") {
         await deps.answerCallbackQuery(callbackQueryId, "Unknown Thread display mode.");
         return true;
       }

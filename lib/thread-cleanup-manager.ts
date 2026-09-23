@@ -10,7 +10,11 @@ import { dirname } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
 import { renameTelegramPathWithRetry, withTelegramFileTransaction } from "./locks.ts";
-import type { TelegramWorkspaceDeletionPermit,
+import { resolveTelegramThreadCleanupWorkPath } from "./paths.ts";
+import { isTelegramTopicTargetStaleError } from "./threads.ts";
+import { createTelegramUpdateJournalBotIdentity } from "./journal.ts";
+import type { TelegramWorkspaceAdmissionLedger,
+  TelegramWorkspaceDeletionPermit,
   TelegramWorkspaceDestructiveFence,
   TelegramWorkspaceRetirementFence } from "./workspace-admission.ts";
 
@@ -83,6 +87,8 @@ export function planTelegramInactiveThreadCleanup(input: {
   reservedTargets?: readonly { chatId: number; threadId: number }[];
   provisioningTargets?: readonly { chatId: number; threadId: number }[];
   cleanupTargets?: readonly { chatId: number; threadId: number }[];
+  /** Only bindings inactive since at or before this instant are candidates. */
+  inactiveBeforeMs?: number;
 }): TelegramThreadCleanupCandidate[] {
   if (!input.profileName) return [];
   const bindingKeys = new Set<string>();
@@ -115,6 +121,8 @@ export function planTelegramInactiveThreadCleanup(input: {
     if (typeof slot !== "string" || !slot || !Number.isSafeInteger(inactiveSinceMs) ||
         inactiveSinceMs === undefined || inactiveSinceMs < 0 ||
         !Number.isSafeInteger(binding.updatedAtMs) || binding.updatedAtMs < inactiveSinceMs) continue;
+    if (input.inactiveBeforeMs !== undefined &&
+        inactiveSinceMs > input.inactiveBeforeMs) continue;
     const evidence = evidenceByBinding.get(binding.bindingKey);
     if (!evidence || targetKey(evidence.target) !== targetKey(binding.target) ||
         evidence.liveOwner !== "clear" || evidence.acceptedWork !== "clear" ||
@@ -190,9 +198,11 @@ export function createTelegramInactiveThreadCleanupReviewRuntime<
   getWorkStore(): TelegramThreadCleanupWorkStore;
   runWorkspaceOperation<T>(input: { operationId: string; operationKind: string;
     scopes: readonly [{ kind: "profile" }] }, operation: () => Promise<T>): Promise<T>;
-}): { review(): Promise<{ count: number; operationId?: string }> } {
+}): {
+  review(options?: { inactiveBeforeMs?: number }): Promise<{ count: number; operationId?: string }>;
+} {
   return {
-    review() {
+    review(options) {
       return deps.runWorkspaceOperation({ operationId: `thread-cleanup-review:${randomUUID()}`,
         operationKind: "thread-cleanup-review", scopes: [{ kind: "profile" }] }, async () => {
         const evidence = captureTelegramInactiveThreadCleanupEvidence({
@@ -201,7 +211,12 @@ export function createTelegramInactiveThreadCleanupReviewRuntime<
           listPendingProvisions: deps.listPendingProvisions,
           listPendingCleanups: deps.listPendingCleanups,
         });
-        const candidates = planTelegramInactiveThreadCleanup(evidence);
+        const candidates = planTelegramInactiveThreadCleanup({
+          ...evidence,
+          ...(options?.inactiveBeforeMs !== undefined
+            ? { inactiveBeforeMs: options.inactiveBeforeMs }
+            : {}),
+        });
         if (candidates.length === 0) return { count: 0 };
         const digest = createHash("sha256").update(JSON.stringify(candidates)).digest("hex").slice(0, 32);
         const operationId = `thread-cleanup:${digest}`;
@@ -503,6 +518,8 @@ export function createTelegramThreadCleanupPermitRuntime(deps: {
       | { kind: "already-issued"; fence: TelegramThreadCleanupFence };
     confirmThreadCleanupAbsence(fence: TelegramThreadCleanupFence): TelegramThreadCleanupFence;
     releaseUnissuedThreadCleanupFence(fence: TelegramThreadCleanupFence): boolean;
+    /** Release a fence whose deletion provably failed; retrying the delete is idempotent. */
+    releaseFailedThreadCleanupFence(fence: TelegramThreadCleanupFence): boolean;
     completeThreadCleanupFence(fence: TelegramThreadCleanupFence): boolean;
   };
   getLeaderEpoch(): number | string | undefined;
@@ -691,4 +708,513 @@ export async function cleanReviewedInactiveThreads<TBinding>(input: {
     return { deleted, outcomeUnknown, blocked, recovery };
   }
   return { deleted, outcomeUnknown, blocked };
+}
+
+export interface TelegramInactiveThreadCleanupRuntimeDeps<
+  TBinding extends TelegramThreadCleanupBindingSnapshot,
+> {
+  getProfileName(): string;
+  getBotToken(): string | undefined;
+  getLeaderEpoch(): number | string | undefined;
+  getOwner(): { processId: number; processBirthId: string };
+  listBindings(): readonly TBinding[];
+  getProtection(binding: TBinding): {
+    liveOwner: TelegramThreadCleanupProtectionState;
+    acceptedWork: TelegramThreadCleanupProtectionState;
+    deliveryAuthority: TelegramThreadCleanupProtectionState;
+  };
+  listReservations(): readonly { target: { chatId: number; threadId: number } }[];
+  listPendingProvisions(): readonly { target?: { chatId: number; threadId: number } }[];
+  listPendingCleanups(): readonly { target: { chatId: number; threadId: number } }[];
+  getAdmissionLedger(): TelegramWorkspaceAdmissionLedger | undefined;
+  resolveFullBinding(
+    candidate: TelegramThreadCleanupCandidate,
+  ): Promise<TBinding | undefined>;
+  deleteTopic(target: { chatId: number; threadId: number }): Promise<void>;
+  markStaleByTarget(candidate: TelegramThreadCleanupCandidate): Promise<void>;
+  commitInactiveWorkspaceCleanup(
+    candidate: TelegramThreadCleanupCandidate,
+    isCurrent: () => boolean,
+  ): Promise<boolean>;
+  /** Adoption requires proof that the fenced owner is dead; anything else fails closed. */
+  canAdoptFence(owner: { processId: number; processBirthId: string }): boolean;
+  /** Absolute path of the Workspace admission ledger, for legacy fence cleanup. */
+  resolveAdmissionPath?(): string | undefined;
+  /** Redacted diagnostics for a failed or ambiguous cleanup step. */
+  recordEvent?(
+    category: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ): void;
+  runWorkspaceOperation<T>(
+    input: {
+      operationId: string;
+      operationKind: string;
+      scopes: readonly [{ kind: "profile" }];
+    },
+    operation: () => Promise<T>,
+  ): Promise<T>;
+}
+
+/**
+ * Leader-side inactive Workspace Thread cleanup: proof-only review plus the destructive
+ * completion of exactly one retained review, under a profile-singleton cleanup fence.
+ *
+ * Review never deletes. Deletion is driven by the operator's panel or by the daemon's
+ * unattended janitor, and always revalidates fresh protection evidence under the fence.
+ */
+export function createTelegramInactiveThreadCleanupRuntime<
+  TBinding extends TelegramThreadCleanupBindingSnapshot,
+>(deps: TelegramInactiveThreadCleanupRuntimeDeps<TBinding>): {
+  review(options?: {
+    inactiveBeforeMs?: number;
+  }): Promise<{ count: number; operationId?: string }>;
+  deleteReviewed(
+    operationId: string,
+  ): Promise<TelegramInactiveThreadCleanupResult>;
+  /**
+   * Proof-only counts with no work-set writes: how many candidates the age cutoff
+   * admits, and how many provable candidates it held back as still too young.
+   */
+  /**
+   * Resolve a cleanup fence left behind by an earlier attempt. A permit that was issued
+   * but never confirmed keeps the profile admission blocked, so cleanup must finish or
+   * retry it before anything else can run.
+   */
+  /**
+   * Delete every currently eligible inactive Thread directly.
+   *
+   * Deliberately not using the admission fence/permit/work-set machinery: that path could
+   * not resolve an interrupted deletion and blocked every profile admission, including
+   * daemon startup. Safety comes from the proof-only planner instead — eligibility and
+   * evidence are recomputed immediately before each candidate, and the binding is only
+   * committed after Telegram confirms that delete.
+   */
+  deleteEligible(options?: { inactiveBeforeMs?: number }): Promise<{
+    deleted: number;
+    blocked: number;
+  }>;
+  /** Remove a legacy cleanup fence that would otherwise block every profile admission. */
+  sweepStaleCleanupFence(): { cleared: boolean; backupPath?: string };
+  recoverUnresolvedFence(): Promise<{
+    status: "none" | "recovered" | "blocked";
+    reason?: string;
+    /** Whether the admission ledger was readable and held a fence at that moment. */
+    sawLedger?: boolean;
+    sawFence?: boolean;
+  }>;
+  survey(options: { inactiveBeforeMs: number }): Promise<{
+    cleanable: number;
+    tooYoung: number;
+    /** Dormant bindings held back by protection evidence that is not `clear`. */
+    blockedByEvidence: number;
+    /** Dormant bindings held back by a competing reservation, provision, or cleanup. */
+    blockedByCompeting: number;
+  }>;
+} {
+  const getWorkStore = () => {
+    const profileName = deps.getProfileName();
+    const botToken = deps.getBotToken();
+    if (!botToken) {
+      throw new Error("Telegram Thread cleanup requires an active bot token.");
+    }
+    return createTelegramThreadCleanupWorkStore({
+      path: resolveTelegramThreadCleanupWorkPath(undefined, profileName),
+      profileName,
+      tokenSha256: createTelegramUpdateJournalBotIdentity({ botToken }).tokenSha256,
+    });
+  };
+  const readStoredCleanupFence = (): TelegramThreadCleanupFence | undefined => {
+    const fence = deps.getAdmissionLedger()?.read().fence;
+    // The ledger can also hold a journal-writer closure fence, which is not a
+    // destructive retirement fence and is not ours to resolve.
+    if (!fence || !("retirementIntentId" in fence)) return undefined;
+    return fence;
+  };
+  const captureEvidence = () => captureTelegramInactiveThreadCleanupEvidence({
+    profileName: deps.getProfileName(),
+    listBindings: deps.listBindings,
+    getProtection: deps.getProtection,
+    listReservations: deps.listReservations,
+    listPendingProvisions: deps.listPendingProvisions,
+    listPendingCleanups: deps.listPendingCleanups,
+  });
+  const reviewRuntime = createTelegramInactiveThreadCleanupReviewRuntime<TBinding>({
+    ...deps,
+    getProfileName: deps.getProfileName,
+    listBindings: deps.listBindings,
+    getProtection: deps.getProtection,
+    listReservations: deps.listReservations,
+    listPendingProvisions: deps.listPendingProvisions,
+    listPendingCleanups: deps.listPendingCleanups,
+    getWorkStore,
+    runWorkspaceOperation: deps.runWorkspaceOperation,
+  });
+  const permitRuntime = createTelegramThreadCleanupPermitRuntime({
+    ledger: {
+      read: () => deps.getAdmissionLedger()?.read() ?? {},
+      acquireThreadCleanupFence(input) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.acquireThreadCleanupFence(input);
+      },
+      adoptThreadCleanupFence(fence, replacement) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.adoptThreadCleanupFence(fence, replacement);
+      },
+      issueThreadCleanupDeletionPermit(fence) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.issueThreadCleanupDeletionPermit(fence);
+      },
+      confirmThreadCleanupAbsence(fence) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.confirmThreadCleanupAbsence(fence);
+      },
+      releaseUnissuedThreadCleanupFence(fence) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.releaseUnissuedThreadCleanupFence(fence);
+      },
+      releaseFailedThreadCleanupFence(fence) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.releaseFailedThreadCleanupFence(fence);
+      },
+      completeThreadCleanupFence(fence) {
+        const ledger = deps.getAdmissionLedger();
+        if (!ledger) throw new Error("Telegram Thread cleanup requires workspace admission.");
+        return ledger.completeThreadCleanupFence(fence);
+      },
+    },
+    getLeaderEpoch: deps.getLeaderEpoch,
+    getProfileName: deps.getProfileName,
+    getOwner: deps.getOwner,
+    canAdoptFence: (fence) => deps.canAdoptFence(fence.owner),
+    async revalidateUnderFence(candidate) {
+      const fresh = planTelegramInactiveThreadCleanup(captureEvidence())
+        .find((entry) => entry.bindingKey === candidate.bindingKey);
+      return (
+        !!fresh &&
+        fresh.bindingUpdatedAtMs === candidate.bindingUpdatedAtMs &&
+        fresh.target.chatId === candidate.target.chatId &&
+        fresh.target.threadId === candidate.target.threadId
+      );
+    },
+  });
+  return {
+    review: reviewRuntime.review,
+    async deleteEligible(options) {
+      const candidates = planTelegramInactiveThreadCleanup({
+        ...captureEvidence(),
+        ...(options?.inactiveBeforeMs !== undefined
+          ? { inactiveBeforeMs: options.inactiveBeforeMs }
+          : {}),
+      });
+      let deleted = 0;
+      let blocked = 0;
+      for (const candidate of candidates) {
+        try {
+          await deps.deleteTopic(candidate.target);
+        } catch (error) {
+          if (!isTelegramTopicTargetStaleError(error)) {
+            blocked += 1;
+            deps.recordEvent?.("telegram", "Inactive Thread deletion failed", {
+              phase: "thread-cleanup-delete",
+              threadId: candidate.target.threadId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            continue;
+          }
+          // The topic is already gone server-side, which is exactly the state a client-side
+          // ghost tab represents; clear the local record instead of failing forever.
+          deps.recordEvent?.("telegram", "Inactive Thread was already absent", {
+            phase: "thread-cleanup-delete",
+            threadId: candidate.target.threadId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        deleted += 1;
+        try {
+          await deps.markStaleByTarget(candidate);
+          const committed = await deps.commitInactiveWorkspaceCleanup(
+            candidate,
+            () => true,
+          );
+          if (!committed) {
+            deps.recordEvent?.("telegram", "Inactive Thread binding stayed after deletion", {
+              phase: "thread-cleanup-commit",
+              threadId: candidate.target.threadId,
+            });
+          }
+        } catch (error) {
+          deps.recordEvent?.("telegram", "Inactive Thread cleanup commit failed", {
+            phase: "thread-cleanup-commit",
+            threadId: candidate.target.threadId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      return { deleted, blocked };
+    },
+    sweepStaleCleanupFence() {
+      const path = deps.resolveAdmissionPath?.();
+      if (!path) return { cleared: false };
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      } catch {
+        return { cleared: false };
+      }
+      const fence = parsed.fence as { destructiveKind?: unknown } | undefined;
+      if (!fence || fence.destructiveKind !== "manual-thread-cleanup") {
+        return { cleared: false };
+      }
+      // A fence this process cannot even observe still blocks every profile admission, so
+      // clear it explicitly and keep a backup instead of leaving the daemon unable to start.
+      const backupPath = `${path}.stale-fence-${Date.now()}.bak`;
+      try {
+        writeFileSync(backupPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
+        delete parsed.fence;
+        writeFileSync(path, JSON.stringify(parsed), { mode: 0o600 });
+      } catch (error) {
+        deps.recordEvent?.("telegram", "Stale cleanup fence sweep failed", {
+          phase: "thread-cleanup-fence-sweep",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return { cleared: false };
+      }
+      deps.recordEvent?.("telegram", "Stale cleanup fence cleared at startup", {
+        phase: "thread-cleanup-fence-sweep",
+        backupPath,
+      });
+      return { cleared: true, backupPath };
+    },
+    async recoverUnresolvedFence(): Promise<{
+      status: "none" | "recovered" | "blocked";
+      reason?: string;
+      sawLedger?: boolean;
+      sawFence?: boolean;
+    }> {
+      const ledger = deps.getAdmissionLedger();
+      if (!ledger) return { status: "none" as const, sawLedger: false };
+      const existing = readStoredCleanupFence();
+      if (!existing) return { status: "none" as const, sawLedger: true, sawFence: false };
+      // The ledger is already scoped to the active profile and bot identity, so any
+      // cleanup fence in it is ours; only a different destructive kind is not.
+      if (
+        (existing.destructiveKind ?? "pressure-retirement") !== "manual-thread-cleanup"
+      ) {
+        return { status: "none" as const };
+      }
+      // The ledger can also hold a journal-writer closure fence, which is not a
+      // destructive retirement fence and is not ours to resolve.
+      if (!("retirementIntentId" in existing)) return { status: "none" as const };
+      let fence: TelegramThreadCleanupFence = existing;
+      const owner = deps.getOwner();
+      if (
+        fence.owner.processId !== owner.processId ||
+        fence.owner.processBirthId !== owner.processBirthId
+      ) {
+        if (!deps.canAdoptFence(fence.owner)) {
+          return { status: "blocked" as const, reason: "fence-owner-alive" };
+        }
+        try {
+          fence = ledger.adoptThreadCleanupFence(fence, {
+            owner,
+            leaderEpoch: deps.getLeaderEpoch() ?? fence.leaderEpoch,
+          });
+          // Adoption refreshes fence stamps, so every later ledger call must use the
+          // stored object; a stale copy fails exact-fence validation.
+          fence = readStoredCleanupFence() ?? fence;
+        } catch (error) {
+          return {
+            status: "blocked" as const,
+            reason: error instanceof Error ? error.message : "adopt-failed",
+          };
+        }
+      }
+      if (fence.phase === "fenced") return { status: "none" as const };
+      const store = getWorkStore();
+      const workSet = store.list().find((entry) => entry.operationId === fence.retirementIntentId);
+      const candidate = workSet?.entries.find((entry) => entry.bindingKey === fence.bindingKey);
+      try {
+        if (fence.phase === "deletion-issued") {
+          // Re-prove the target once: either the delete lands now, or the topic is already
+          // gone. Both make absence confirmation truthful.
+          try {
+            await deps.deleteTopic(fence.target);
+            if (candidate) await deps.markStaleByTarget(candidate);
+          } catch (error) {
+            // The deletion did not happen. Retrying `deleteForumTopic` later is
+            // idempotent, while holding the fence blocks every profile admission —
+            // including the leader's startup — so release it and report why.
+            const stored = readStoredCleanupFence();
+            const released =
+              stored && stored.retirementIntentId === fence.retirementIntentId
+                ? ledger.releaseFailedThreadCleanupFence(stored)
+                : false;
+            deps.recordEvent?.(
+              "telegram",
+              "Inactive Thread cleanup fence released after a failed deletion",
+              {
+                phase: "thread-cleanup-fence-release",
+                threadId: fence.target.threadId,
+                released,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
+            return {
+              status: released ? ("recovered" as const) : ("blocked" as const),
+              reason: error instanceof Error ? error.message : "delete-failed",
+            };
+          }
+        }
+        const ready = ledger.confirmThreadCleanupAbsence(readStoredCleanupFence() ?? fence);
+        const committed = candidate
+          ? await deps.commitInactiveWorkspaceCleanup(candidate, () => true)
+          : true;
+        if (committed) ledger.completeThreadCleanupFence(ready);
+        deps.recordEvent?.("telegram", "Inactive Thread cleanup fence recovered", {
+          phase: "thread-cleanup-fence-recovery",
+          threadId: fence.target.threadId,
+          phaseBefore: existing.phase,
+          committed,
+        });
+        return { status: "recovered" as const, reason: `deletion-${existing.phase}` };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        deps.recordEvent?.("telegram", "Inactive Thread cleanup fence unresolved", {
+          phase: "thread-cleanup-fence-recovery",
+          threadId: fence.target.threadId,
+          phaseBefore: existing.phase,
+          error: message,
+        });
+        return { status: "blocked" as const, reason: message };
+      }
+    },
+    survey(options) {
+      const evidence = captureEvidence();
+      // Eligible under full evidence (no age cutoff) and cleanable under it.
+      const all = planTelegramInactiveThreadCleanup(evidence);
+      const cleanable = planTelegramInactiveThreadCleanup({
+        ...evidence,
+        inactiveBeforeMs: options.inactiveBeforeMs,
+      });
+      const cleanableKeys = new Set(cleanable.map((entry) => entry.bindingKey));
+      let tooYoung = 0;
+      let blockedByEvidence = 0;
+      let blockedByCompeting = 0;
+      for (const binding of evidence.bindings) {
+        if (typeof binding.inactiveSinceMs !== "number") continue;
+        // Probe one binding at a time with proven-clear protection and no competitors: if
+        // that cannot produce a candidate, the binding itself is not dormant-eligible.
+        const both = planTelegramInactiveThreadCleanup({
+          ...evidence,
+          bindings: [binding],
+          protection: [
+            {
+              bindingKey: binding.bindingKey,
+              target: binding.target,
+              liveOwner: "clear" as const,
+              acceptedWork: "clear" as const,
+              deliveryAuthority: "clear" as const,
+            },
+          ],
+          reservedTargets: [],
+          provisioningTargets: [],
+          cleanupTargets: [],
+        });
+        if (both.length === 0) continue;
+        if (cleanableKeys.has(binding.bindingKey)) continue;
+        if (all.some((entry) => entry.bindingKey === binding.bindingKey)) {
+          tooYoung += 1;
+          continue;
+        }
+        // Real protection with no competitor still yields nothing, so evidence blocks it.
+        const clearedOnly = planTelegramInactiveThreadCleanup({
+          ...evidence,
+          reservedTargets: [],
+          provisioningTargets: [],
+          cleanupTargets: [],
+        });
+        if (!clearedOnly.some((entry) => entry.bindingKey === binding.bindingKey)) {
+          blockedByEvidence += 1;
+        } else {
+          blockedByCompeting += 1;
+        }
+      }
+      return Promise.resolve({
+        cleanable: cleanable.length,
+        tooYoung,
+        blockedByEvidence,
+        blockedByCompeting,
+      });
+    },
+    deleteReviewed(operationId) {
+      return cleanReviewedInactiveThreads({
+        operationId,
+        store: getWorkStore(),
+        permitRuntime,
+        resolveFullBinding: deps.resolveFullBinding,
+        async deleteWithPermit(permit, candidate) {
+          if (
+            permit.destructiveKind !== "manual-thread-cleanup" ||
+            permit.bindingKey !== candidate.bindingKey ||
+            permit.slot !== candidate.slot ||
+            permit.target.chatId !== candidate.target.chatId ||
+            permit.target.threadId !== candidate.target.threadId
+          ) {
+            throw new Error("Telegram Thread cleanup received a mismatched deletion permit.");
+          }
+          try {
+            await deps.deleteTopic(candidate.target);
+          } catch (error) {
+            // The coordinator keeps an ambiguous outcome and never replays it, so this is
+            // the only place the real Telegram failure becomes visible.
+            deps.recordEvent?.("telegram", "Inactive Thread deletion failed", {
+              phase: "thread-cleanup-delete",
+              threadId: candidate.target.threadId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
+          await deps.markStaleByTarget(candidate);
+        },
+        commitBinding(candidate) {
+          const profileName = deps.getProfileName();
+          const leaderEpoch = deps.getLeaderEpoch();
+          return deps.commitInactiveWorkspaceCleanup(candidate, () =>
+            leaderEpoch !== undefined &&
+            deps.getLeaderEpoch() === leaderEpoch &&
+            deps.getProfileName() === profileName);
+        },
+      });
+    },
+  };
+}
+
+/**
+ * Operator-visible summary of one unattended cleanup pass. Returns undefined when the
+ * pass settled nothing, so the janitor stays silent instead of posting noise.
+ */
+export function formatTelegramUnattendedCleanupNotice(
+  result: TelegramInactiveThreadCleanupResult,
+): string | undefined {
+  const { deleted, outcomeUnknown, blocked } = result;
+  if (deleted > 0) {
+    const leftover = outcomeUnknown + blocked;
+    return leftover > 0
+      ? `🧹 <b>Unattended cleanup deleted ${deleted} inactive tab(s); ${leftover} stayed blocked.</b>`
+      : `🧹 <b>Unattended cleanup deleted ${deleted} inactive tab(s).</b>`;
+  }
+  if (outcomeUnknown > 0) {
+    return `⚠️ <b>Unattended cleanup deleted nothing; ${outcomeUnknown} deletion outcome is unknown.</b>`;
+  }
+  if (blocked > 0) {
+    return `⚠️ <b>Unattended cleanup deleted nothing; ${blocked} candidate(s) stayed blocked.</b>`;
+  }
+  return undefined;
 }

@@ -119,6 +119,8 @@ export interface TelegramBridgeStatusBusFollower {
   slot?: string;
   threadName?: string;
   status?: string;
+  /** Reported follower activity, used to project `state` Thread titles. */
+  activity?: { streaming?: boolean; compacting?: boolean; pending?: number };
 }
 
 export interface TelegramBridgeStatusLocalBus {

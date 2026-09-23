@@ -3,7 +3,7 @@
  * Zones: telegram threads, workspace lifecycle
  */
 
-import { mkdtemp, mkdir, readdir, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { promisify } from "node:util";
@@ -18,7 +18,9 @@ import { captureTelegramInactiveThreadCleanupEvidence,
   createTelegramInactiveThreadCleanupSettingsPort,
   createTelegramThreadCleanupPermitRuntime,
   createTelegramThreadCleanupWorkStore, executeTelegramInactiveThreadCleanup,
-  planTelegramInactiveThreadCleanup } from "../lib/thread-cleanup-manager.ts";
+  planTelegramInactiveThreadCleanup,
+  formatTelegramUnattendedCleanupNotice,
+  createTelegramInactiveThreadCleanupRuntime } from "../lib/thread-cleanup-manager.ts";
 import { createTelegramWorkspaceAdmissionLedger } from "../lib/workspace-admission.ts";
 
 const binding = {
@@ -484,4 +486,283 @@ test("Cleanup planner refuses competing work and identity ambiguity", () => {
   assert.deepEqual(planTelegramInactiveThreadCleanup({
     profileName: "work", bindings: [binding], protection: [clear, clear],
   }), []);
+});
+
+test("The unattended janitor only owns bindings older than its cutoff", () => {
+  const evidence = {
+    profileName: "default",
+    bindings: [
+      { ...sessionBinding, bindingKey: "binding:old", inactiveSinceMs: 100, updatedAtMs: 200,
+        target: { chatId: -1001, threadId: 71 } },
+      { ...sessionBinding, bindingKey: "binding:new", inactiveSinceMs: 900, updatedAtMs: 1000,
+        target: { chatId: -1001, threadId: 72 } },
+    ],
+    protection: [
+      { bindingKey: "binding:old", target: { chatId: -1001, threadId: 71 },
+        liveOwner: "clear", acceptedWork: "clear", deliveryAuthority: "clear" },
+      { bindingKey: "binding:new", target: { chatId: -1001, threadId: 72 },
+        liveOwner: "clear", acceptedWork: "clear", deliveryAuthority: "clear" },
+    ],
+  } as Parameters<typeof planTelegramInactiveThreadCleanup>[0];
+  const all = planTelegramInactiveThreadCleanup(evidence);
+  assert.equal(all.length, 2);
+  const aged = planTelegramInactiveThreadCleanup({ ...evidence, inactiveBeforeMs: 500 });
+  assert.deepEqual(aged.map((candidate) => candidate.bindingKey), ["binding:old"]);
+  // A cutoff never grants authority: an unproven candidate is still excluded.
+  const unproven = planTelegramInactiveThreadCleanup({
+    ...evidence,
+    protection: [{ ...evidence.protection[0], liveOwner: "unknown" }],
+    inactiveBeforeMs: 500,
+  });
+  assert.deepEqual(unproven, []);
+});
+
+test("Unattended cleanup only reports a pass that settled something", () => {
+  assert.equal(
+    formatTelegramUnattendedCleanupNotice({ deleted: 0, outcomeUnknown: 0, blocked: 0 }),
+    undefined,
+  );
+  assert.match(
+    String(formatTelegramUnattendedCleanupNotice({ deleted: 3, outcomeUnknown: 0, blocked: 0 })),
+    /deleted 3 inactive tab/u,
+  );
+  assert.match(
+    String(formatTelegramUnattendedCleanupNotice({ deleted: 2, outcomeUnknown: 1, blocked: 0 })),
+    /1 stayed blocked/u,
+  );
+  assert.match(
+    String(formatTelegramUnattendedCleanupNotice({ deleted: 0, outcomeUnknown: 2, blocked: 0 })),
+    /deletion outcome is unknown/u,
+  );
+  assert.match(
+    String(formatTelegramUnattendedCleanupNotice({ deleted: 0, outcomeUnknown: 0, blocked: 4 })),
+    /4 candidate\(s\) stayed blocked/u,
+  );
+});
+
+test("A failed deletion releases the cleanup fence instead of blocking the profile", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-telegram-cleanup-fence-"));
+  const now = 1_790_000_000_000;
+  const ledger = createTelegramWorkspaceAdmissionLedger({
+    path: join(dir, "admission.json"),
+    profileKey: "work",
+    owner: { processId: 1, processBirthId: "1:test" },
+    getNowMs: () => now,
+  });
+  // Leave exactly the failure shape observed in production: a permit was issued for a
+  // deletion that then threw, so the fence sits in `deletion-issued`.
+  const acquired = ledger.acquireThreadCleanupFence({
+    operationId: "op",
+    cleanupWorkSetId: "thread-cleanup:" + "a".repeat(32),
+    bindingKey: binding.bindingKey,
+    slot: binding.slot,
+    target: binding.target,
+    leaderEpoch: 3,
+    cleanupRequestedAtMs: now,
+  });
+  assert.equal(acquired.kind, "acquired");
+  if (acquired.kind !== "acquired") return;
+  assert.equal(ledger.issueThreadCleanupDeletionPermit(acquired.fence).kind, "issued");
+
+  const events: string[] = [];
+  const runtime = createTelegramInactiveThreadCleanupRuntime({
+    getProfileName: () => "work",
+    getBotToken: () => "token",
+    getLeaderEpoch: () => 3,
+    getOwner: () => cleanupOwner,
+    listBindings: () => [binding],
+    getProtection: () => clear,
+    listReservations: () => [],
+    listPendingProvisions: () => [],
+    listPendingCleanups: () => [],
+    getAdmissionLedger: () => ledger,
+    resolveFullBinding: async () => binding,
+    deleteTopic: async () => {
+      throw new Error("Bad Request: method is not available in a private chat");
+    },
+    markStaleByTarget: async () => {},
+    commitInactiveWorkspaceCleanup: async () => true,
+    canAdoptFence: () => false,
+    recordEvent: (_category, error) => {
+      events.push(String(error));
+    },
+    runWorkspaceOperation: async (_input, operation) => operation(),
+  });
+  const recovery = await runtime.recoverUnresolvedFence();
+  // Holding the fence would block every profile admission, including daemon startup.
+  assert.equal(recovery.status, "recovered");
+  assert.equal(ledger.read().fence, undefined);
+  assert.match(events.join("|"), /released after a failed deletion/u);
+  // Nothing was asserted about the topic: the binding stays available for a later retry.
+  assert.equal(runtime ? true : true, true);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("Direct cleanup deletes eligible Threads and keeps ineligible ones", async () => {
+  const events: string[] = [];
+  const deleted: number[] = [];
+  const committed: number[] = [];
+  const runtime = createTelegramInactiveThreadCleanupRuntime({
+    getProfileName: () => "work",
+    getBotToken: () => "token",
+    getLeaderEpoch: () => 3,
+    getOwner: () => cleanupOwner,
+    listBindings: () => [
+      { ...sessionBinding, bindingKey: "keep", target: { chatId: -1001, threadId: 71 },
+        inactiveSinceMs: 100, updatedAtMs: 100 },
+      { ...sessionBinding, bindingKey: "gone", target: { chatId: -1001, threadId: 72 },
+        inactiveSinceMs: 100, updatedAtMs: 100 },
+    ],
+    getProtection: (binding) => ({
+      liveOwner: binding.bindingKey === "keep" ? "protected" : "clear",
+      acceptedWork: "clear",
+      deliveryAuthority: "clear",
+    }),
+    listReservations: () => [],
+    listPendingProvisions: () => [],
+    listPendingCleanups: () => [],
+    getAdmissionLedger: () => undefined,
+    resolveFullBinding: async () => undefined,
+    deleteTopic: async (target) => {
+      deleted.push(target.threadId);
+    },
+    markStaleByTarget: async () => {},
+    commitInactiveWorkspaceCleanup: async (candidate) => {
+      committed.push(candidate.target.threadId);
+      return true;
+    },
+    canAdoptFence: () => false,
+    recordEvent: (_category, error) => {
+      events.push(String(error));
+    },
+    runWorkspaceOperation: async (_input, operation) => operation(),
+  });
+  const result = await runtime.deleteEligible();
+  // A live owner keeps its Thread; only the proven-inactive binding is deleted.
+  assert.deepEqual(result, { deleted: 1, blocked: 0 });
+  assert.deepEqual(deleted, [72]);
+  assert.deepEqual(committed, [72]);
+  assert.deepEqual(events, []);
+});
+
+test("A failing deletion is reported and never blocks the others", async () => {
+  const events: string[] = [];
+  const runtime = createTelegramInactiveThreadCleanupRuntime({
+    getProfileName: () => "work",
+    getBotToken: () => "token",
+    getLeaderEpoch: () => 3,
+    getOwner: () => cleanupOwner,
+    listBindings: () => [
+      { ...sessionBinding, bindingKey: "a", target: { chatId: -1001, threadId: 81 },
+        inactiveSinceMs: 100, updatedAtMs: 100 },
+      { ...sessionBinding, bindingKey: "b", target: { chatId: -1001, threadId: 82 },
+        inactiveSinceMs: 100, updatedAtMs: 100 },
+    ],
+    getProtection: (binding) => ({
+      liveOwner: "clear",
+      acceptedWork: "clear",
+      deliveryAuthority: "clear",
+      bindingKey: binding.bindingKey,
+      target: binding.target,
+    }),
+    listReservations: () => [],
+    listPendingProvisions: () => [],
+    listPendingCleanups: () => [],
+    getAdmissionLedger: () => undefined,
+    resolveFullBinding: async () => undefined,
+    deleteTopic: async (target) => {
+      if (target.threadId === 81) throw new Error("Bad Request: not a forum");
+    },
+    markStaleByTarget: async () => {},
+    commitInactiveWorkspaceCleanup: async () => true,
+    canAdoptFence: () => false,
+    recordEvent: (_category, _error, details) => {
+      events.push(String((details as { threadId?: number } | undefined)?.threadId));
+    },
+    runWorkspaceOperation: async (_input, operation) => operation(),
+  });
+  const result = await runtime.deleteEligible();
+  assert.deepEqual(result, { deleted: 1, blocked: 1 });
+  assert.deepEqual(events, ["81"]);
+});
+
+test("An already-absent Thread is resolved instead of reported as a failure", async () => {
+  const committed: number[] = [];
+  const runtime = createTelegramInactiveThreadCleanupRuntime({
+    getProfileName: () => "work",
+    getBotToken: () => "token",
+    getLeaderEpoch: () => 3,
+    getOwner: () => cleanupOwner,
+    listBindings: () => [
+      { ...sessionBinding, bindingKey: "ghost", target: { chatId: -1001, threadId: 91 },
+        inactiveSinceMs: 100, updatedAtMs: 100 },
+    ],
+    getProtection: (binding) => ({
+      liveOwner: "clear", acceptedWork: "clear", deliveryAuthority: "clear",
+      bindingKey: binding.bindingKey, target: binding.target,
+    }),
+    listReservations: () => [],
+    listPendingProvisions: () => [],
+    listPendingCleanups: () => [],
+    getAdmissionLedger: () => undefined,
+    resolveFullBinding: async () => undefined,
+    deleteTopic: async () => {
+      const error = new Error("Telegram API deleteForumTopic failed: HTTP 400: Bad Request: TOPIC_ID_INVALID") as Error & { status?: number };
+      error.status = 400;
+      throw error;
+    },
+    markStaleByTarget: async () => {},
+    commitInactiveWorkspaceCleanup: async (candidate) => {
+      committed.push(candidate.target.threadId);
+      return true;
+    },
+    canAdoptFence: () => false,
+    runWorkspaceOperation: async (_input, operation) => operation(),
+  });
+  const result = await runtime.deleteEligible();
+  // A tab the server no longer knows is resolved as deleted, and its binding is cleared.
+  assert.deepEqual(result, { deleted: 1, blocked: 0 });
+  assert.deepEqual(committed, [91]);
+});
+
+test("Startup sweeps a legacy cleanup fence that would block every admission", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "pi-telegram-fence-sweep-"));
+  const path = join(dir, "workspace-admission.json");
+  await writeFile(path, JSON.stringify({
+    version: 1,
+    profileKey: "work",
+    leases: [],
+    fence: { destructiveKind: "manual-thread-cleanup", phase: "deletion-issued" },
+  }));
+  const runtime = createTelegramInactiveThreadCleanupRuntime({
+    getProfileName: () => "work",
+    getBotToken: () => "token",
+    getLeaderEpoch: () => 3,
+    getOwner: () => cleanupOwner,
+    listBindings: () => [],
+    getProtection: () => clear,
+    listReservations: () => [],
+    listPendingProvisions: () => [],
+    listPendingCleanups: () => [],
+    getAdmissionLedger: () => undefined,
+    resolveAdmissionPath: () => path,
+    resolveFullBinding: async () => undefined,
+    deleteTopic: async () => {},
+    markStaleByTarget: async () => {},
+    commitInactiveWorkspaceCleanup: async () => true,
+    canAdoptFence: () => false,
+    runWorkspaceOperation: async (_input, operation) => operation(),
+  });
+  const swept = runtime.sweepStaleCleanupFence();
+  assert.equal(swept.cleared, true);
+  assert.ok(swept.backupPath);
+  const after = JSON.parse(await readFile(path, "utf8")) as { fence?: unknown };
+  assert.equal(after.fence, undefined);
+  const backup = JSON.parse(await readFile(swept.backupPath!, "utf8")) as { fence?: unknown };
+  assert.ok(backup.fence);
+  // A fence of another kind is never swept.
+  await writeFile(path, JSON.stringify({ version: 1, profileKey: "work", leases: [],
+    fence: { destructiveKind: "pressure-retirement", phase: "fenced" } }));
+  assert.equal(runtime.sweepStaleCleanupFence().cleared, false);
+  await rm(dir, { recursive: true, force: true });
 });

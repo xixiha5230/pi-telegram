@@ -49,6 +49,250 @@ export interface TelegramThreadNameInput {
   slot?: string;
 }
 
+/**
+ * Every OS-verifiable process identity recorded for a Thread's owner.
+ *
+ * A Pi instance is identified as `<pid>:<start|generation>:<fingerprint>`. Thread records carry
+ * that shape in `instanceId`/`owner.instanceId` for manual followers and inside the retained
+ * follower-journal keys, so an owner's liveness can be checked directly instead of inferring it
+ * from the follower registry alone.
+ */
+export function collectTelegramOwnerProcessIdentities(input: {
+  instanceId?: string;
+  ownerInstanceId?: string;
+  processBirthId?: string;
+  journalBindingKeys?: readonly string[];
+}): readonly string[] {
+  const pattern = /(\d+:(?:start|generation):[0-9a-zA-Z]+)/g;
+  const found = new Set<string>();
+  // Instance ids keep their own `<pid>:<createdAtMs>` shape, which supports a PID-level check.
+  for (const direct of [
+    input.processBirthId,
+    input.ownerInstanceId,
+    input.instanceId,
+  ]) {
+    if (direct) found.add(direct);
+  }
+  for (const key of input.journalBindingKeys ?? []) {
+    for (const match of key.matchAll(pattern)) found.add(match[1]!);
+  }
+  return [...found];
+}
+
+/**
+ * Workspace bindings whose recorded owner is gone, so their Thread is dormant.
+ *
+ * A binding is only dormant when its thread record is still active-ish, its owner instance is
+ * neither the leader nor a registered follower, no reservation/provision/cleanup competes for
+ * the target, and the binding has not already recorded inactivity. Recording dormancy is what
+ * lets proof-based inactive-Thread cleanup see it later; it never deletes anything itself.
+ */
+export function selectTelegramOrphanedWorkspaceBindingTargets(input: {
+  bindings: readonly TelegramWorkspaceThreadBinding[];
+  records: readonly {
+    instanceId?: string;
+    owner?: TelegramThreadOwner;
+    processBirthId?: string;
+    status?: string;
+    target: TelegramTarget;
+    lastSyncObservedAtMs?: number;
+    updatedAtMs?: number;
+  }[];
+  liveInstanceIds: readonly string[];
+  liveTargets: readonly TelegramTarget[];
+  competingTargets?: readonly TelegramTarget[];
+  /**
+   * Direct OS-level liveness for a recorded process identity. An `alive` owner protects its
+   * Thread even when it is not currently registered; unknown evidence falls back to the
+   * registry view.
+   */
+  getInstanceLiveness?: (
+    processIdentity: string,
+  ) => "alive" | "dead" | "unverifiable";
+  /** PID-level fallback for `<pid>:<createdAtMs>` identities that carry no birth proof. */
+  getInstancePidLiveness?: (
+    processIdentity: string,
+  ) => "alive" | "dead" | "unverifiable";
+  nowMs?: number;
+}): readonly {
+  target: TelegramTarget & { threadId: number };
+  /** Last moment the absent owner was observed; dormancy starts there, not now. */
+  dormantSinceMs: number;
+}[] {
+  const targetKey = (target: TelegramTarget): string =>
+    `${target.chatId}:${target.threadId ?? ""}`;
+  const liveInstances = new Set(input.liveInstanceIds);
+  const live = new Set(input.liveTargets.map(targetKey));
+  const competing = new Set((input.competingTargets ?? []).map(targetKey));
+  const bindings = new Map(
+    input.bindings.map((binding) => [targetKey(binding.target), binding]),
+  );
+  const fallbackMs =
+    Number.isSafeInteger(input.nowMs) && (input.nowMs ?? 0) > 0
+      ? (input.nowMs as number)
+      : Date.now();
+  const selected: {
+    target: TelegramTarget & { threadId: number };
+    dormantSinceMs: number;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const record of input.records) {
+    if (record.status !== "active" && record.status !== "probe-required") continue;
+    if (!record.instanceId || liveInstances.has(record.instanceId)) continue;
+    const key = targetKey(record.target);
+    if (
+      live.has(key) ||
+      competing.has(key) ||
+      seen.has(key) ||
+      !Number.isSafeInteger(record.target.threadId) ||
+      (record.target.threadId ?? 0) <= 0
+    ) {
+      continue;
+    }
+    const binding = bindings.get(key);
+    if (!binding || binding.inactiveSinceMs !== undefined) continue;
+    // A registered owner is live; an unregistered one may still be a live Pi process that
+    // simply is not connected, so ask the OS before treating its Thread as dormant.
+    const identities = collectTelegramOwnerProcessIdentities({
+      instanceId: record.instanceId,
+      ownerInstanceId:
+        record.owner && "instanceId" in record.owner
+          ? record.owner.instanceId
+          : undefined,
+      processBirthId: record.processBirthId,
+      journalBindingKeys: binding.journalBindingKeys,
+    });
+    const ownerAlive = identities.some((identity) => {
+      const exact = /^\d+:(?:start|generation):/u.test(identity);
+      const verdict = exact
+        ? input.getInstanceLiveness?.(identity)
+        : input.getInstancePidLiveness?.(identity);
+      return verdict === "alive";
+    });
+    if (ownerAlive) continue;
+    seen.add(key);
+    const observed = [record.lastSyncObservedAtMs, record.updatedAtMs].find(
+      (value): value is number => Number.isSafeInteger(value) && (value ?? 0) > 0,
+    );
+    selected.push({
+      target: { chatId: record.target.chatId, threadId: record.target.threadId! },
+      dormantSinceMs: Math.min(observed ?? fallbackMs, fallbackMs),
+    });
+  }
+  // A retained binding whose record is gone entirely has no owner left to observe either, so
+  // it is dormant for the same reason; the registry, live-target, and competing guards above
+  // still decide whether anything else currently holds that Thread.
+  const recordedTargets = new Set(input.records.map((record) => targetKey(record.target)));
+  for (const binding of input.bindings) {
+    const key = targetKey(binding.target);
+    if (
+      recordedTargets.has(key) ||
+      live.has(key) ||
+      competing.has(key) ||
+      seen.has(key) ||
+      binding.inactiveSinceMs !== undefined ||
+      !Number.isSafeInteger(binding.target.threadId) ||
+      binding.target.threadId <= 0
+    ) {
+      continue;
+    }
+    seen.add(key);
+    selected.push({
+      target: { chatId: binding.target.chatId, threadId: binding.target.threadId },
+      dormantSinceMs: Math.min(
+        Number.isSafeInteger(binding.updatedAtMs) && binding.updatedAtMs > 0
+          ? binding.updatedAtMs
+          : fallbackMs,
+        fallbackMs,
+      ),
+    });
+  }
+  return selected;
+}
+
+/** Periodic dormant-binding sweep for the transport leader. */
+export function createTelegramWorkspaceOrphanSweepRuntime(deps: {
+  instanceId: string;
+  listFollowers: () => readonly {
+    instanceId: string;
+    target?: TelegramTarget;
+  }[];
+  listBindings: () => readonly TelegramWorkspaceThreadBinding[];
+  listRecords: () => readonly {
+    instanceId?: string;
+    owner?: TelegramThreadOwner;
+    processBirthId?: string;
+    status?: string;
+    target: TelegramTarget;
+    lastSyncObservedAtMs?: number;
+    updatedAtMs?: number;
+  }[];
+  listReservations: () => readonly { target: TelegramTarget }[];
+  listPendingProvisions: () => readonly { target?: TelegramTarget }[];
+  listPendingCleanups: () => readonly { target: TelegramTarget }[];
+  markInactive: (target: TelegramTarget, nowMs: number) => boolean;
+  persist: () => Promise<void>;
+  /** Direct OS-level owner liveness, so an unregistered but live Pi keeps its Thread. */
+  getInstanceLiveness?: (
+    processIdentity: string,
+  ) => "alive" | "dead" | "unverifiable";
+  getInstancePidLiveness?: (
+    processIdentity: string,
+  ) => "alive" | "dead" | "unverifiable";
+  now?: () => number;
+  recordEvent?: (
+    category: string,
+    error: unknown,
+    details?: Record<string, unknown>,
+  ) => void;
+}): { sweep: () => number } {
+  const sweep = (): number => {
+    try {
+      const followers = deps.listFollowers();
+      const targets = selectTelegramOrphanedWorkspaceBindingTargets({
+        bindings: deps.listBindings(),
+        records: deps.listRecords(),
+        liveInstanceIds: [deps.instanceId, ...followers.map((follower) => follower.instanceId)],
+        liveTargets: followers
+          .map((follower) => follower.target)
+          .filter((target): target is TelegramTarget => !!target),
+        competingTargets: [
+          ...deps.listReservations().map((entry) => entry.target),
+          ...deps.listPendingProvisions()
+            .map((entry) => entry.target)
+            .filter((target): target is TelegramTarget => !!target),
+          ...deps.listPendingCleanups().map((entry) => entry.target),
+        ],
+        ...(deps.getInstanceLiveness
+          ? { getInstanceLiveness: deps.getInstanceLiveness }
+          : {}),
+        ...(deps.getInstancePidLiveness
+          ? { getInstancePidLiveness: deps.getInstancePidLiveness }
+          : {}),
+        nowMs: (deps.now ?? Date.now)(),
+      });
+      let marked = 0;
+      for (const candidate of targets) {
+        if (deps.markInactive(candidate.target, candidate.dormantSinceMs)) {
+          marked += 1;
+        }
+      }
+      if (marked > 0) {
+        void deps.persist();
+        deps.recordEvent?.("telegram", "Telegram Workspace bindings marked inactive", {
+          phase: "workspace-orphan-sweep",
+          marked,
+        });
+      }
+      return marked;
+    } catch (error) {
+      deps.recordEvent?.("telegram", error, { phase: "workspace-orphan-sweep" });
+      return 0;
+    }
+  };
+  return { sweep };
+}
+
 export interface TelegramWorkspaceBindingIdentity {
   cwd: string;
   workspaceKey: string;
@@ -273,6 +517,11 @@ export interface TelegramTopicTargetRecord {
   /** Explicit per-Workspace display override set by the operator. */
   manualThreadName?: string;
   instanceId?: string;
+  /**
+   * OS-verifiable birth identity (`<pid>:start:<fingerprint>`) of the instance that owns this
+   * record, so a live-but-unregistered owner can be proven alive without consulting the registry.
+   */
+  processBirthId?: string;
   slot?: string;
   lastError?: string;
   syncStatus?: TelegramTopicSyncStatus;
@@ -1114,7 +1363,15 @@ function normalizeRecord(
     target: { chatId: targetRecord.chatId, threadId: targetRecord.threadId },
     status,
     createdAtMs: record.createdAtMs,
-    updatedAtMs: record.updatedAtMs,
+    // Recording inactivity is a write, so a record whose stamp predates its own
+    // inactivity is repaired on read; otherwise it can never satisfy cleanup
+    // eligibility (`updatedAtMs >= inactiveSinceMs`) or the exact-snapshot commit.
+    updatedAtMs:
+      typeof record.inactiveSinceMs === "number" &&
+      Number.isFinite(record.inactiveSinceMs) &&
+      record.inactiveSinceMs > record.updatedAtMs
+        ? record.inactiveSinceMs
+        : record.updatedAtMs,
     threadName: getPersistedThreadName(record),
     ...(typeof record.manualThreadName === "string" &&
       normalizeTelegramTopicTargetThreadName(record.manualThreadName)
@@ -1123,6 +1380,9 @@ function normalizeRecord(
       : {}),
     instanceId:
       typeof record.instanceId === "string" ? record.instanceId : undefined,
+    ...(typeof record.processBirthId === "string" && record.processBirthId
+      ? { processBirthId: record.processBirthId }
+      : {}),
     slot: typeof record.slot === "string" ? record.slot : undefined,
   };
   const syncStatus = record.syncStatus ?? record.twinStatus;
@@ -1182,7 +1442,15 @@ function normalizeIdentityRecord(
   if (typeof record.updatedAtMs !== "number") return undefined;
   const identity: TelegramThreadIdentityRecord = {
     profileKey: record.profileKey,
-    updatedAtMs: record.updatedAtMs,
+    // Recording inactivity is a write, so a record whose stamp predates its own
+    // inactivity is repaired on read; otherwise it can never satisfy cleanup
+    // eligibility (`updatedAtMs >= inactiveSinceMs`) or the exact-snapshot commit.
+    updatedAtMs:
+      typeof record.inactiveSinceMs === "number" &&
+      Number.isFinite(record.inactiveSinceMs) &&
+      record.inactiveSinceMs > record.updatedAtMs
+        ? record.inactiveSinceMs
+        : record.updatedAtMs,
   };
   const persistedThreadName = getPersistedThreadName(record);
   if (persistedThreadName) {
@@ -1307,7 +1575,15 @@ function normalizeWorkspaceBindingRecord(
     ...(threadName ? { threadName } : {}),
     ...(manualThreadName ? { manualThreadName } : {}),
     ...(slot ? { slot } : {}),
-    updatedAtMs: record.updatedAtMs,
+    // Recording inactivity is a write, so a record whose stamp predates its own
+    // inactivity is repaired on read; otherwise it can never satisfy cleanup
+    // eligibility (`updatedAtMs >= inactiveSinceMs`) or the exact-snapshot commit.
+    updatedAtMs:
+      typeof record.inactiveSinceMs === "number" &&
+      Number.isFinite(record.inactiveSinceMs) &&
+      record.inactiveSinceMs > record.updatedAtMs
+        ? record.inactiveSinceMs
+        : record.updatedAtMs,
   };
 }
 
@@ -2842,7 +3118,10 @@ export function createTelegramTopicTargetStore(
       if (!Number.isFinite(inactiveSinceMs) || inactiveSinceMs < 0) return false;
       for (const [key, binding] of workspaceBindings) {
         if (!targetMatches(binding.target, target) || binding.inactiveSinceMs !== undefined) continue;
-        workspaceBindings.set(key, { ...binding, inactiveSinceMs });
+        // Recording inactivity is itself a write, so the update stamp moves with it.
+        // Cleanup eligibility requires `updatedAtMs >= inactiveSinceMs`; leaving the
+        // stamp behind makes every dormant binding permanently ineligible.
+        workspaceBindings.set(key, { ...binding, inactiveSinceMs, updatedAtMs: inactiveSinceMs });
         markDirty();
         return true;
       }
@@ -2854,6 +3133,7 @@ export function createTelegramTopicTargetStore(
         if (!targetMatches(binding.target, target) || binding.inactiveSinceMs === undefined) continue;
         const next = { ...binding };
         delete next.inactiveSinceMs;
+        next.updatedAtMs = getNowMs();
         workspaceBindings.set(key, next);
         markDirty();
         return true;
@@ -4604,6 +4884,7 @@ export interface TelegramThreadStatusFollowerView {
     runtimeBuild: string;
     capabilities: string[];
   };
+  activity?: { streaming?: boolean; compacting?: boolean; pending?: number };
 }
 
 function getTelegramThreadStatusName(
@@ -4634,6 +4915,7 @@ export function listTelegramThreadStatusFollowers(options: {
   slot?: string;
   threadName?: string;
   status?: string;
+  activity?: { streaming?: boolean; compacting?: boolean; pending?: number };
 }> {
   return options.followers.map((follower) => {
     const record = options.records.find((record) => {
@@ -4651,6 +4933,7 @@ export function listTelegramThreadStatusFollowers(options: {
       slot: record?.slot,
       threadName: getTelegramThreadStatusName(record),
       status: record?.status,
+      ...(follower.activity ? { activity: follower.activity } : {}),
     };
   });
 }

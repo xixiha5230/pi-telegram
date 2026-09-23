@@ -153,6 +153,43 @@ export function getTelegramProcessLiveness(
   return proof.identity === owner.processBirthId ? "alive" : "dead";
 }
 
+/**
+ * Liveness of the process behind an instance or owner identity, judged by PID alone.
+ *
+ * Bus instance ids have the shape `<pid>:<createdAtMs>` and carry no OS birth proof, so the exact
+ * comparison above cannot be applied. A live PID still means the owning Pi instance may well
+ * exist, which is enough to keep that instance's Telegram Thread protected from dormant cleanup.
+ */
+export function getTelegramInstancePidLiveness(
+  identity: string,
+  options: TelegramProcessLivenessOptions = {},
+): TelegramProcessLiveness {
+  const match = /^(\d+):/u.exec(identity);
+  const processId = match ? Number(match[1]) : Number.NaN;
+  if (!Number.isSafeInteger(processId) || processId <= 0) return "unverifiable";
+  const processAlive = options.isProcessAlive ?? isProcessAlive;
+  return processAlive(processId) ? "alive" : "dead";
+}
+
+/** Bounded activity parse: malformed or out-of-range values are dropped, never trusted. */
+export function parseTelegramBusFollowerActivity(
+  value: unknown,
+): TelegramBusFollowerActivity | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as { streaming?: unknown; compacting?: unknown; pending?: unknown };
+  const activity: TelegramBusFollowerActivity = {};
+  if (typeof record.streaming === "boolean") activity.streaming = record.streaming;
+  if (typeof record.compacting === "boolean") activity.compacting = record.compacting;
+  if (
+    Number.isSafeInteger(record.pending) &&
+    (record.pending as number) >= 0 &&
+    (record.pending as number) <= 10_000
+  ) {
+    activity.pending = record.pending as number;
+  }
+  return Object.keys(activity).length > 0 ? activity : undefined;
+}
+
 export function getTelegramProcessBirthIdentityLiveness(
   processBirthId: string,
   options: TelegramProcessLivenessOptions = {},
@@ -169,16 +206,32 @@ export function getTelegramProcessBirthIdentityLiveness(
   return proof.identity === processBirthId ? "alive" : "dead";
 }
 
+/**
+ * Identity environment a spawning process uses to declare the manual-follower
+ * identity of the Pi instance it launches.
+ *
+ * By default that identity comes from the parent process, which is what keeps a Pi
+ * restarted in the same terminal bound to the same Thread. A supervisor that launches
+ * several independent Pi workers from one process must declare one identity per
+ * worker instead, otherwise every worker looks like a successor of the others and the
+ * leader hands the same Thread between them.
+ */
+export const TELEGRAM_FOLLOWER_OWNER_ID_ENV = "PI_TELEGRAM_FOLLOWER_OWNER_ID";
+
 export function createCurrentTelegramBusProcessRuntime(input: {
   getActiveProfileName: () => string | undefined;
   pid?: number;
   parentPid?: number;
   createdAtMs?: number;
+  env?: NodeJS.ProcessEnv;
 }): TelegramBusProcessRuntime {
+  const env = input.env ?? process.env;
+  const declaredOwnerId = env[TELEGRAM_FOLLOWER_OWNER_ID_ENV]?.trim();
   return createTelegramBusProcessRuntime({
     getActiveProfileName: input.getActiveProfileName,
     pid: input.pid ?? process.pid,
     parentPid: input.parentPid ?? process.ppid,
+    ...(declaredOwnerId ? { parentProcessIdentity: declaredOwnerId } : {}),
     createdAtMs: input.createdAtMs ?? Date.now(),
   });
 }
@@ -232,6 +285,13 @@ export const TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME =
 export const TELEGRAM_BUS_CAPABILITY_THREAD_DISPLAY_MODE = "thread-display-mode-v1" as const;
 export const TELEGRAM_BUS_CAPABILITY_DIRECTORY_DISPLAY_FORMAT =
   "directory-display-format-v1" as const;
+/**
+ * Follower-reported live activity (streaming, compacting, queued work), which the leader uses to
+ * project Thread titles in `state` display mode. Progressive: a peer that does not advertise it
+ * simply keeps its directory title.
+ */
+export const TELEGRAM_BUS_CAPABILITY_FOLLOWER_ACTIVITY = "follower-activity-v1" as const;
+
 export const TELEGRAM_BUS_CAPABILITY_WORKSPACE_FOLLOWER_AUTO_CONNECT =
   "workspace-follower-auto-connect-v1" as const;
 
@@ -364,6 +424,14 @@ export function getTelegramBusFollowerSocketPath(
   });
 }
 
+/** Bounded live-activity projection a follower reports with its heartbeat. */
+export interface TelegramBusFollowerActivity {
+  streaming?: boolean;
+  compacting?: boolean;
+  /** Executable prompts still waiting for the instance, bounded by the parser. */
+  pending?: number;
+}
+
 export interface TelegramBusInstanceRegistration {
   instanceId: string;
   previousInstanceId?: string;
@@ -379,6 +447,7 @@ export interface TelegramBusInstanceRegistration {
   protocol?: TelegramBusProtocolIdentity;
   sessionGeneration?: number;
   processBirthId?: string;
+  activity?: TelegramBusFollowerActivity;
   connectedAtMs: number;
 }
 
@@ -783,6 +852,7 @@ export type TelegramBusEnvelope = (
       requestId: string;
       instanceId: string;
       registrationGeneration?: string;
+      activity?: TelegramBusFollowerActivity;
       sentAtMs: number;
     }
   | {
@@ -1030,7 +1100,8 @@ export function parseTelegramBusEnvelope(
       if (typeof value.instanceId === "string" &&
           typeof value.registrationGeneration === "string" &&
           (value.mode === "letters" || value.mode === "names" ||
-      value.mode === "directory-snake" || value.mode === "directory-title")) {
+      value.mode === "directory-snake" || value.mode === "directory-title" ||
+      value.mode === "state")) {
         envelope = { kind, requestId, instanceId: value.instanceId,
           registrationGeneration: value.registrationGeneration, mode: value.mode };
       }
@@ -2136,6 +2207,7 @@ export interface TelegramBusFollowerRegistry {
   heartbeat: (
     instanceId: string,
     nowMs: number,
+    activity?: TelegramBusFollowerActivity,
   ) => TelegramBusFollowerView | undefined;
   get: (instanceId: string) => TelegramBusFollowerView | undefined;
   getByTarget: (target: TelegramTarget) => TelegramBusFollowerView | undefined;
@@ -2210,10 +2282,14 @@ export function createTelegramBusFollowerRegistry(): TelegramBusFollowerRegistry
       followers.set(registration.instanceId, next);
       return clone(next);
     },
-    heartbeat: (instanceId, nowMs) => {
+    heartbeat: (instanceId, nowMs, activity) => {
       const existing = followers.get(instanceId);
       if (!existing) return undefined;
-      const next = { ...existing, lastHeartbeatMs: nowMs };
+      const next = {
+        ...existing,
+        ...(activity ? { activity } : {}),
+        lastHeartbeatMs: nowMs,
+      };
       followers.set(instanceId, next);
       return clone(next);
     },
@@ -2309,6 +2385,7 @@ function parseHeartbeatEnvelope(
   value: Record<string, unknown>,
   requestId: string,
 ): TelegramBusEnvelope | undefined {
+  const activity = parseTelegramBusFollowerActivity(value.activity);
   return typeof value.instanceId === "string" &&
     typeof value.sentAtMs === "number"
     ? {
@@ -2318,6 +2395,7 @@ function parseHeartbeatEnvelope(
         ...(typeof value.registrationGeneration === "string"
           ? { registrationGeneration: value.registrationGeneration }
           : {}),
+        ...(activity ? { activity } : {}),
         sentAtMs: value.sentAtMs,
       }
     : undefined;
@@ -3017,6 +3095,8 @@ function parseRegistration(
   if (typeof value.processBirthId === "string" && value.processBirthId) {
     registration.processBirthId = value.processBirthId;
   }
+  const activity = parseTelegramBusFollowerActivity(value.activity);
+  if (activity) registration.activity = activity;
   const protocol = parseTelegramBusProtocolIdentity(value.protocol);
   if (protocol) registration.protocol = protocol;
   if (target) registration.target = target;

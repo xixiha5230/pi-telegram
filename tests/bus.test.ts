@@ -26,11 +26,13 @@ import {
 } from "../lib/bus-transport.ts";
 import {
   createCurrentTelegramBusProcessRuntime,
+  TELEGRAM_FOLLOWER_OWNER_ID_ENV,
   canUseTelegramBusInputCustodyReference,
   createTelegramBusFollowerDeliveryIdentity,
   createTelegramBusForwardOwnershipValidator,
   createTelegramBusFollowerSourceReferenceDeliveryIdentity,
   createTelegramBusFollowerRegistry,
+  parseTelegramBusFollowerActivity,
   type TelegramBusEnvelope,
   createTelegramBusFollowerThreadRestoreHandler,
   createTelegramBusProtocolIdentity,
@@ -985,6 +987,17 @@ test("Bus follower registry registers, heartbeats, and prunes live instances", (
 
   assert.equal(registry.heartbeat("missing", 2000), undefined);
   assert.equal(registry.heartbeat("inst-a", 2200)?.lastHeartbeatMs, 2200);
+  // Live activity rides along with the heartbeat so `state` Thread titles can be projected.
+  const withActivity = registry.heartbeat("inst-a", 2300, {
+    streaming: true,
+    compacting: false,
+    pending: 2,
+  });
+  assert.deepEqual(withActivity?.activity, { streaming: true, compacting: false, pending: 2 });
+  assert.deepEqual(
+    registry.heartbeat("inst-a", 2400)?.activity,
+    { streaming: true, compacting: false, pending: 2 },
+  );
   assert.deepEqual(
     registry.list().map((follower) => follower.instanceId),
     ["inst-a", "inst-b"],
@@ -2848,4 +2861,59 @@ test("Bus follower registry returns defensive copies", () => {
     chatId: 1,
     threadId: 2,
   });
+});
+
+test("A spawning supervisor can declare one manual-follower identity per worker", () => {
+  const base = {
+    getActiveProfileName: () => "default",
+    pid: 4242,
+    parentPid: 999,
+    createdAtMs: 1,
+  };
+  const inherited = createCurrentTelegramBusProcessRuntime(base);
+  const first = createCurrentTelegramBusProcessRuntime({
+    ...base,
+    env: { [TELEGRAM_FOLLOWER_OWNER_ID_ENV]: "worker:hive-in" },
+  });
+  const second = createCurrentTelegramBusProcessRuntime({
+    ...base,
+    env: { [TELEGRAM_FOLLOWER_OWNER_ID_ENV]: "worker:hack-face" },
+  });
+  // Without a declared identity the parent process still decides, which is what keeps
+  // a Pi restarted in the same terminal bound to the same Thread.
+  assert.equal(inherited.manualFollowerOwnerId, inherited.manualFollowerOwnerId);
+  assert.equal(first.manualFollowerOwnerId, "worker:hive-in");
+  // Two workers launched by one supervisor must never share an identity, or the leader
+  // hands the same Thread from one to the other.
+  assert.notEqual(first.manualFollowerOwnerId, second.manualFollowerOwnerId);
+  const blank = createCurrentTelegramBusProcessRuntime({
+    ...base,
+    env: { [TELEGRAM_FOLLOWER_OWNER_ID_ENV]: "   " },
+  });
+  assert.equal(blank.manualFollowerOwnerId, inherited.manualFollowerOwnerId);
+});
+
+test("Follower activity is parsed within bounds and dropped when malformed", () => {
+  assert.deepEqual(
+    parseTelegramBusFollowerActivity({ streaming: true, compacting: true, pending: 7 }),
+    { streaming: true, compacting: true, pending: 7 },
+  );
+  assert.equal(parseTelegramBusFollowerActivity("nonsense"), undefined);
+  assert.equal(parseTelegramBusFollowerActivity({}), undefined);
+  // Out-of-range or wrong-typed fields are dropped rather than trusted.
+  assert.equal(parseTelegramBusFollowerActivity({ pending: -1 }), undefined);
+  assert.equal(parseTelegramBusFollowerActivity({ pending: 1e9 }), undefined);
+  assert.equal(parseTelegramBusFollowerActivity({ streaming: "yes" }), undefined);
+  assert.deepEqual(parseTelegramBusFollowerActivity({ streaming: false }), { streaming: false });
+  assert.equal(
+    getTelegramBusEnvelopeTrafficClass({
+      kind: "follower.heartbeat",
+      requestId: "heartbeat:activity",
+      instanceId: "follower",
+      registrationGeneration: "generation-1",
+      activity: { streaming: true },
+      sentAtMs: 1,
+    }),
+    "generation-fenced",
+  );
 });
