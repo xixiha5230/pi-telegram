@@ -1,5 +1,8 @@
 # Voice Integration
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 Voice messages flow through an **inbound transcription → outbound voice reply** pipeline. This document describes the bridge's role in that pipeline; provider-specific mechanics (TTS/STT backends, voice IDs, languages) are owned by configured handler scripts or voice provider extensions. This is a first-class extension surface: one companion extension can provide STT fallbacks for inbound voice/audio files and TTS fallbacks for outbound Telegram voice replies without owning a second bot polling loop.
 
 ## Overview

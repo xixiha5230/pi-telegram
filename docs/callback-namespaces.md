@@ -1,5 +1,8 @@
 # Callback Namespace Standard
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 Telegram `callback_data` is one bot-wide namespace. Any extension that creates inline buttons for a bot shared with `pi-telegram` must use namespaced callback data.
 
 ## Format

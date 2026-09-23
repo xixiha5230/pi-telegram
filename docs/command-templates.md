@@ -1,5 +1,8 @@
 # Command Template Standard
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 Command templates are the portable integration format for deterministic local automation.
 
 **Meta-contract:** transportable (bit-for-bit identical across projects), high-density (zero fluff), constant (evolve by crystallizing, not speculating), optimal minimum (add only when it hurts).

@@ -1,5 +1,8 @@
 # Generative Apps Runtime For Telegram
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 _Status: incremental implementation. Canonical installation and explicit transactional replacement, agent-side method invocation, state/history commits, partial-tail recovery, cross-process transition locking with dead-owner recovery, installation-generation plus revision rejection for direct app-output controls, lifecycle-cancelled worker-isolated methods, the bounded non-shell process port, strict bound-action parsing, pre-model-queue `tgbtn` dispatch, new-message default views, opt-in in-place bound-action edits with explicit-action send fallback, and memory-only live dashboards with bounded scheduling, same-handle action rescheduling, Delivery failure classification, exact routed-target retention, unavailable-message invalidation, and lifecycle cancellation are implemented locally. Agent-mediated initial-surface revision capture, process-birth lock proof, voice delivery, and removal remain open in the backlog._
 
 ## Purpose

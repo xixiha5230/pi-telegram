@@ -1,5 +1,8 @@
 # Telegram Delivery API
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 ## Purpose
 
 The Telegram Delivery API gives trusted extension consumers a safe programmatic way to render operational Telegram UI without importing bridge internals or owning Telegram transport.

@@ -1,5 +1,8 @@
 # Public API
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 `pi-telegram` is both a Pi extension and a small Telegram platform for companion extensions. This document defines the stable public surface. Everything outside this document is implementation detail unless another focused doc explicitly marks it stable.
 
 ## Stability Levels
@@ -117,6 +120,8 @@ interface TelegramConfig {
   };
   threads?: {
     automaticCleanup?: boolean;
+    /** Let the transport leader delete provably inactive tabs unattended. Default false. */
+    unattendedCleanup?: boolean;
   };
 }
 ```

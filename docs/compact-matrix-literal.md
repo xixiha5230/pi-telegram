@@ -1,5 +1,8 @@
 # Adaptive Button Literal
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 > Status: Portable CML v4 button standard; `pi-telegram` also reuses its positional-cell mechanics for compact voice actions.
 
 Adaptive Button Literal is one bounded-depth matrix grammar over a shared button AST. It accepts strict JSON button objects, positional Compact Matrix Literal (CML) cells, or both in the same matrix and row. Commas between completed matrix or row elements are optional, so producers can progressively compress representation without changing runtime meaning.

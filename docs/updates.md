@@ -1,5 +1,8 @@
 # Updates
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 `updates` owns Telegram update classification, default-routing plans, and the public update-handler registry. The internal `polling` domain owns the actual `getUpdates` loop, offsets, and abort/controller state.
 
 `pi-telegram` owns a single `getUpdates` long-poll connection per bot. Other pi extensions cannot open a competing polling connection against the same bot — the Telegram Bot API uses a per-bot `offset` cursor, and two loops race each other and lose updates.

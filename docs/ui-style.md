@@ -1,5 +1,8 @@
 # UI Style Guide
 
+> Descriptive reference for the current code; it describes, it does not rule.
+> Binding rules live in [`../AGENTS.md`](../AGENTS.md).
+
 Small standard for inline buttons, menu rows, state controls, cards, and confirmation dialogs.
 
 ## Principles
@@ -27,7 +30,7 @@ Use emoji as stable semantic markers, not decoration. Emoji carry transportable 
 | `🧠` | Thinking level | `/thinking`, thinking menu headings, thinking status rows | Use only for reasoning/thinking controls. |
 | `🔢` | Queue list / ordered work | `/queue`, queue menu entrypoints | Queue item rows may also use numeric labels. |
 | `⏱️` | Queue is ticking / current work is active | Inline main-menu Queue row only | Running-clock queue state: the narrow present moment is being worked now. |
-| `⏳` | Waiting / temporarily busy | Inline main-menu Queue row, busy notices | Hourglass means work or availability is pending; the sentence must name what is busy. |
+| `⏳` | Waiting / temporarily busy | Inline main-menu Queue row, busy notices, `state` Thread titles while working | Hourglass means work or availability is pending; the sentence must name what is busy. |
 | `⌛` | Empty / standing idle | Inline main-menu Queue row, empty-queue notices | Standing hourglass means no future work is waiting above the neck. |
 | `⚙️` | Settings / configuration | Settings menu headings and Settings navigation rows | Extension-injected rows appear before the built-in `⚙️ Settings` row. |
 | `🧩` | Extension-provided surface | Extension command examples, extension section examples | Companion extensions may choose their own emoji, but `🧩` means generic extension/plugin. |
@@ -42,7 +45,7 @@ Use emoji as stable semantic markers, not decoration. Emoji carry transportable 
 
 | Emoji | Meaning | Canonical surfaces | Notes |
 | --- | --- | --- | --- |
-| `🟢` | Start / active / current positive state | `/start`, active row, current selected option, active `On` toggle | In command context it means “open/start menu”; in state context it means selected/active. |
+| `🟢` | Start / active / current positive state | `/start`, active row, current selected option, active `On` toggle, `state` Thread titles when ready | In command context it means “open/start menu”; in state context it means selected/active. |
 | `🗜` | Compact session | `/compact`, compact confirmation action | Do not use for generic cleanup/delete. |
 | `⏩` | Abort and advance | Busy `/next` command result and matching menu action | Means the active turn is aborted before advancing to queued work. |
 | `▶️` | Play / continue immediately | Idle `/next` result, `/continue` command, and matching menu action | Means work can start or resume directly without first aborting an active turn. |
@@ -56,6 +59,19 @@ Use emoji as stable semantic markers, not decoration. Emoji carry transportable 
 | `☑️` | Activate / choose this item | Model detail activation action, generated button-only choice heading | Positive selection cue; use `🟢 Active` for already-current state. |
 | `❌` | No / cancel / terminal failure | Confirmation cancel buttons and terminal failure notices | Do not use for a recoverable operation failure that leaves session state intact. |
 | `🗑` | Delete / defer removal | Destructive confirmations and removal reaction | In the queue menu, reversible Keep/Skip selectors replace immediate deletion. |
+
+### Daemon Control Panel
+
+| Emoji | Meaning | Canonical surfaces | Notes |
+| --- | --- | --- | --- |
+| `🛠️` | Daemon control panel | `/daemon` menu headings | The panel is the daemon thread's only command; everything inside it is a button. |
+| `📁` | Directory / launch a worker there | Worker picker rows and the "new worker" entry | Directory browsing only, never a generic file or attachment marker. |
+| `📍` | Locate a worker's Thread | Per-worker roster rows | Posts a marker into that worker's own Thread so the operator can find the tab; it does not bind or move anything. |
+| `🛑` | Stop a managed worker process | Per-worker roster action and its confirmation | Process lifecycle, distinct from `⏹️`, which aborts active Pi work inside a live worker. |
+| `♻️` | Restart a managed worker | Per-worker roster action | Relaunch the same project; distinct from `🔄` refresh, which re-renders a surface. |
+| `↩️` | Return to the previous panel layer | Every nested panel and picker layer | A nested layer always offers the way back; the panel never closes itself. |
+| `✖️` | Close the panel | `/daemon` menu only | Explicit operator dismissal of the panel message; nested layers return instead of closing. |
+| `🧹` | Thread cleanup / janitor | `/daemon` Threads layer, Telegram Settings cleanup card | Inactive-tab review and the automatic-cleanup switch; review is proof-only and never deletes. |
 
 ### Informational Feedback
 
