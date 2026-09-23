@@ -1,0 +1,95 @@
+docs/README.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_4c5b96d97be8d4 29
+CHANGELOG.md
+  s_c01d23f2c17642::t_bd2861fa172f4b 10
+  s_c01d23f2c17642::t_a2a864370d2461 9
+  s_c01d23f2c17642::t_03562cc586c325 8,11
+  s_c01d23f2c17642::t_7be237a0c2d07c 14
+  s_c01d23f2c17642::t_8839cb01394c17 7
+docs/inbound.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/architecture.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_759336d5536c98 33,67,116,238,258,320
+  s_c01d23f2c17642::t_0697212a60eeba 327-328,334
+AGENTS.md
+  s_c01d23f2c17642::t_6ca697aa5b9a15 1-87
+docs/compact-matrix-literal.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/control-plane.md
+  s_c01d23f2c17642::t_83888b0c838a18 258-262
+  s_c01d23f2c17642::t_8ec8f80c871fd6 307,311,323-332,454
+  s_c01d23f2c17642::t_8839cb01394c17 308-310,312,315-320,322
+  s_c01d23f2c17642::t_96eed0b684aafc 279-282
+  s_c01d23f2c17642::t_7530fdc31ae787 214-219,247,314
+  s_c01d23f2c17642::t_34b5eb6542e278 213
+  s_c01d23f2c17642::t_3ec8cc019684e5 333
+  s_c01d23f2c17642::t_7cc51a0f490836 220-225,321
+  s_c01d23f2c17642::t_82d7c66894d320 59,134,263-269,276-278,283-284,303,437,461-462,475
+  s_c01d23f2c17642::t_e51533dfcbbcb2 10
+  s_c01d23f2c17642::t_f69d5eb0f0e9a4 127-133,135-138
+  s_c01d23f2c17642::t_086ec7d641f1c5 122
+  s_c01d23f2c17642::t_45ddcbdb5e2122 1-2,6-7,9,11-58,60-84,86-121,123-126,139-181,285-302,304-306,313,334-337,339-436,438-442,444-452,455-460,463-474,476-484
+  s_c01d23f2c17642::t_1e06ee6dda49ca 8
+  s_c01d23f2c17642::t_3b529495eeb0a4 182-189,202-212,251-254
+  s_c01d23f2c17642::t_cfdb79b64b39e4 226-240
+  s_c01d23f2c17642::t_8b326952d043b6 85,443,453
+  s_c01d23f2c17642::t_0b36ae7eb0ffac 190-201
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_bd2861fa172f4b 241-246
+  s_c01d23f2c17642::t_3ea8850c533652 248-250,255-257,338
+  s_c01d23f2c17642::t_0b54da30114481 270-275
+docs/callback-namespaces.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/command-templates.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/voice.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/activity.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/sections.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/updates.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/delivery.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/outbound.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+docs/public-api.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_7cc51a0f490836 123-124
+docs/multi-instance-bus.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_96eed0b684aafc 173
+  s_c01d23f2c17642::t_3ea8850c533652 174-175
+BACKLOG.md
+  s_c01d23f2c17642::t_38111972a7f5d8 7
+  s_c01d23f2c17642::t_7cc51a0f490836 8
+  s_c01d23f2c17642::t_49326ef01ecd92 9
+  s_c01d23f2c17642::t_96bb5429ed1f95 10
+  s_c01d23f2c17642::t_ca225ede89ceb1 6
+docs/ui-style.md
+  s_c01d23f2c17642::t_3ea8850c533652 33,48
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+  s_c01d23f2c17642::t_3dbf439b726e0a 63-73,75
+  s_c01d23f2c17642::t_48db8032a526a0 74
+docs/generative-apps.md
+  s_c01d23f2c17642::t_4fd06748a670b7 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "442dbf9761925d11e5e998daf929203a53f3136a",
+  "prompts": {},
+  "sessions": {
+    "s_c01d23f2c17642": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a0c4df-d666-72d3-9f46-b8014edbd3cb",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
