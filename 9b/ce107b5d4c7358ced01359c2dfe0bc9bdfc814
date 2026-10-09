@@ -1,0 +1,28 @@
+lib/bus-leader.ts
+  s_26bd2f22699832::t_02a07de64d5e55 1810-1811,2568
+  s_26bd2f22699832::t_93cca9981e68aa 2559-2567
+  s_26bd2f22699832::t_4eab3d1c340f4d 617,848-849,3062
+tests/bus-leader.test.ts
+  s_26bd2f22699832::t_b6dd1a9ed4090c 21,4376-4416,4418-4425
+  s_26bd2f22699832::t_a673f13294703e 4417
+CHANGELOG.md
+  s_26bd2f22699832::t_8bd442208660cb 11
+BACKLOG.md
+  s_26bd2f22699832::t_0c90648c205302 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "9bce107b5d4c7358ced01359c2dfe0bc9bdfc814",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
