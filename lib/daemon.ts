@@ -18,6 +18,7 @@ import * as Paths from "./paths.ts";
 import { createTelegramBridge } from "./bridge.ts";
 import { createDaemonBridgeHost } from "./daemon-host.ts";
 import { createTelegramWorkerSupervisor } from "./supervisor.ts";
+import { createTelegramWorkerAttachmentRuntime } from "./worker-attachment.ts";
 import { createNodeWorkerSpawnPort } from "./worker-process.ts";
 import {
   createTelegramWorkerRegistry,
@@ -120,23 +121,12 @@ export function createTelegramDaemon(
       Paths.resolveTelegramProfileTempFilePath("daemon", "json"),
     ),
   );
-  const attachments = new Map<
-    string,
-    { workerId: string; previousTarget: { chatId: number; threadId: number } }
-  >();
-  const attachmentKey = (target: {
-    chatId: number;
-    threadId?: number;
-  }): string => `${target.chatId}:${target.threadId ?? 0}`;
   const persist = (): void => {
     try {
       store.save({
         workers: workers.serialize(),
         routes: routes.serialize(),
-        attachments: [...attachments.entries()].map(([key, value]) => ({
-          key,
-          ...value,
-        })),
+        attachments: attachmentRuntime.serialize(),
       });
     } catch (error) {
       core.ports.recordRuntimeEvent?.("daemon", error, { phase: "persist" });
@@ -152,6 +142,22 @@ export function createTelegramDaemon(
   const routes = createTelegramRouteRegistry({ onChange: persist });
   const epoch = randomUUID();
   routes.adoptEpoch(epoch);
+  // `/attach`/`/detach` re-home a worker's Thread through the authenticated follower
+  // path; the owning domain keeps the eligibility checks and the previous-Thread record.
+  const attachmentRuntime = createTelegramWorkerAttachmentRuntime({
+    routes,
+    resolveFollower: (workerId) => resolveFollowerByWorkerId(workerId),
+    replaceServeTarget: (input) =>
+      core.ports.replaceFollowerServeTarget({
+        record: { instanceId: input.workerId },
+        target: input.target,
+        oldTarget: input.oldTarget,
+        reason: "operator-attach",
+      }),
+    getDaemonTarget: () => core.cleanup.getLeaderTarget(),
+    epoch,
+    onChange: persist,
+  });
   const restored = store.load();
   const resumedWorkers = selectTelegramResumableManagedWorkers(
     (restored?.workers ?? []) as readonly TelegramWorkerSnapshot[],
@@ -159,33 +165,7 @@ export function createTelegramDaemon(
   if (restored) {
     workers.restore(restored.workers as readonly TelegramWorkerSnapshot[]);
     routes.restore(restored.routes as readonly TelegramRouteSnapshot[]);
-    for (const entry of restored.attachments) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-      const record = entry as {
-        key?: unknown;
-        workerId?: unknown;
-        previousTarget?: unknown;
-      };
-      const previous = record.previousTarget as
-        | { chatId?: unknown; threadId?: unknown }
-        | undefined;
-      if (
-        typeof record.key !== "string" ||
-        typeof record.workerId !== "string" ||
-        !previous ||
-        !Number.isSafeInteger(previous.chatId) ||
-        !Number.isSafeInteger(previous.threadId)
-      ) {
-        continue;
-      }
-      attachments.set(record.key, {
-        workerId: record.workerId,
-        previousTarget: {
-          chatId: previous.chatId as number,
-          threadId: previous.threadId as number,
-        },
-      });
-    }
+    attachmentRuntime.restore(restored.attachments);
   }
   // Mirror only workers this daemon spawned itself (`pi --mode rpc`). Attached
   // followers stay outside the control plane: their Telegram transport is owned by
@@ -477,7 +457,7 @@ export function createTelegramDaemon(
     }
   };
   /** Resolve a live bus follower from a stable managed-worker id. */
-  const resolveFollowerByWorkerId = (workerId: string) => {
+  function resolveFollowerByWorkerId(workerId: string) {
     if (!workerId.startsWith("worker:")) return undefined;
     const spec = workerId.slice("worker:".length);
     const entry = supervisor?.list().find((worker) => worker.spec === spec);
@@ -485,123 +465,12 @@ export function createTelegramDaemon(
     return core.ports.busFollowers
       .list()
       .find((candidate) => candidate.pid === entry.pid);
-  };
+  }
   const cancelWorkerUiForWorkerId = (workerId: string): void => {
     const follower = resolveFollowerByWorkerId(workerId);
     if (follower?.pid === undefined) return;
     const entry = supervisor?.list().find((worker) => worker.pid === follower.pid);
     if (entry) workerUi?.cancelWorker(entry.spec);
-  };
-  /**
-   * Move a live worker's Telegram Thread to `target` so inbound delivery follows the
-   * operator's attachment. The worker's directory identity is unchanged; only its
-   * current Thread attribute moves, and the previous Thread is retained for `/detach`.
-   */
-  const attachWorkerTarget = async (input: {
-    workerId: string;
-    target: { chatId: number; threadId?: number };
-  }): Promise<{ ok: boolean; message: string }> => {
-    const follower = resolveFollowerByWorkerId(input.workerId);
-    const workerTarget = follower?.target;
-    const registrationGeneration =
-      follower?.registrationGeneration ??
-      workers.get(input.workerId)?.registrationGeneration;
-    const threadId = input.target.threadId;
-    if (!registrationGeneration || !workerTarget || workerTarget.threadId === undefined) {
-      return { ok: false, message: "That Pi worker has no live Thread to move." };
-    }
-    if (threadId === undefined) {
-      return { ok: false, message: "Attach a forum topic, not the General thread." };
-    }
-    // The daemon's own thread carries the control panel; moving a worker onto it would
-    // collide with the panel. Refuse instead of silently breaking the surface.
-    const daemonTarget = core.cleanup.getLeaderTarget();
-    if (
-      daemonTarget &&
-      daemonTarget.chatId === input.target.chatId &&
-      daemonTarget.threadId === threadId
-    ) {
-      return { ok: false, message: "The daemon control thread cannot serve a worker." };
-    }
-    if (input.target.chatId !== workerTarget.chatId) {
-      return { ok: false, message: "A worker can only move within its own chat." };
-    }
-    if (threadId === workerTarget.threadId) {
-      routes.set({
-        target: { chatId: input.target.chatId, threadId },
-        workerId: input.workerId,
-        registrationGeneration,
-        epoch,
-      });
-      return { ok: true, message: "This thread already serves that worker." };
-    }
-    const replaced = await core.ports.replaceFollowerServeTarget({
-      record: { instanceId: input.workerId },
-      target: { chatId: input.target.chatId, threadId },
-      oldTarget: { chatId: workerTarget.chatId, threadId: workerTarget.threadId },
-      reason: "operator-attach",
-    });
-    if (!replaced) {
-      return { ok: false, message: "The Pi worker refused the Thread move." };
-    }
-    attachments.set(attachmentKey({ chatId: input.target.chatId, threadId }), {
-      workerId: input.workerId,
-      previousTarget: {
-        chatId: workerTarget.chatId,
-        threadId: workerTarget.threadId,
-      },
-    });
-    routes.set({
-      target: { chatId: input.target.chatId, threadId },
-      workerId: input.workerId,
-      registrationGeneration,
-      epoch,
-    });
-    persist();
-    return { ok: true, message: "moved" };
-  };
-  /**
-   * Undo the most recent `/attach` for this Thread by moving the worker back to the
-   * Thread it served before. Refuses when no attachment is recorded rather than
-   * guessing which Thread the worker belongs in.
-   */
-  const detachWorkerTarget = async (input: {
-    target: { chatId: number; threadId?: number };
-  }): Promise<{ ok: boolean; message: string }> => {
-    const threadId = input.target.threadId;
-    if (threadId === undefined) {
-      return { ok: false, message: "This thread had no attached Pi worker." };
-    }
-    const key = attachmentKey(input.target);
-    const record = attachments.get(key);
-    if (!record) {
-      return { ok: false, message: "This thread had no attached Pi worker." };
-    }
-    const follower = resolveFollowerByWorkerId(record.workerId);
-    const currentTarget = follower?.target;
-    const replaced = await core.ports.replaceFollowerServeTarget({
-      record: { instanceId: record.workerId },
-      target: record.previousTarget,
-      ...(currentTarget?.threadId !== undefined
-        ? {
-            oldTarget: {
-              chatId: currentTarget.chatId,
-              threadId: currentTarget.threadId,
-            },
-          }
-        : {}),
-      reason: "operator-attach",
-    });
-    if (!replaced) {
-      return { ok: false, message: "The Pi worker could not be moved back." };
-    }
-    attachments.delete(key);
-    routes.clear({
-      target: { chatId: input.target.chatId, threadId },
-      epoch,
-    });
-    persist();
-    return { ok: true, message: "moved" };
   };
   const control = createTelegramWorkerControl({
     workers,
@@ -627,8 +496,8 @@ export function createTelegramDaemon(
                   worker.startsWith("worker:") ? worker.slice("worker:".length) : worker,
                 );
               },
-              attach: attachWorkerTarget,
-              detach: detachWorkerTarget,
+              attach: (input) => attachmentRuntime.attach(input),
+              detach: (input) => attachmentRuntime.detach(input),
             } satisfies TelegramWorkerControlPort,
           }
         : {}),
