@@ -96,6 +96,20 @@ export interface TelegramManagedWorkerView {
   model?: string;
 }
 
+/**
+ * Redacted record of one managed-worker launch. It carries the operator-declared launch
+ * shape only: no environment, arguments, token, or Pi session content.
+ */
+export interface TelegramManagedWorkerLaunchAuditEntry {
+  spec: string;
+  cwd: string;
+  pid: number;
+  session: "latest" | "new" | "resume";
+  trust: TelegramWorkerLaunchSpec["trust"];
+  restart: TelegramWorkerLaunchSpec["restart"];
+  startedAtMs: number;
+}
+
 export interface TelegramWorkerSupervisorResult {
   ok: boolean;
   message: string;
@@ -116,6 +130,8 @@ export interface TelegramWorkerSupervisor {
   stop: (worker: string | number) => TelegramWorkerSupervisorResult;
   restart: (worker: string | number) => TelegramWorkerSupervisorResult;
   list: () => readonly TelegramManagedWorkerView[];
+  /** Bounded, redacted launch audit of every managed worker this supervisor started. */
+  launchAudit: () => readonly TelegramManagedWorkerLaunchAuditEntry[];
   dispose: () => void;
 }
 
@@ -165,6 +181,7 @@ export function createTelegramWorkerSupervisor(
   const restartDelayMs = ports.restartDelayMs ?? 2000;
   const maxRestartAttempts = ports.maxRestartAttempts ?? 5;
   const managed = new Map<number, ManagedEntry>();
+  const launchAudit: TelegramManagedWorkerLaunchAuditEntry[] = [];
 
   const findManagedBySpec = (specName: string): ManagedEntry | undefined => {
     for (const entry of managed.values()) {
@@ -318,6 +335,16 @@ export function createTelegramWorkerSupervisor(
     });
     managed.set(entry.process.pid, entry);
     entry.pid = entry.process.pid;
+    launchAudit.push({
+      spec: spec.name,
+      cwd: spec.cwd,
+      pid: entry.process.pid,
+      session: typeof spec.session === "object" ? "resume" : spec.session,
+      trust: spec.trust,
+      restart: spec.restart,
+      startedAtMs: entry.startedAtMs,
+    });
+    if (launchAudit.length > 64) launchAudit.splice(0, launchAudit.length - 64);
     ports.recordEvent?.("Managed worker started", {
       phase: "worker-start",
       pid: entry.process.pid,
@@ -417,26 +444,32 @@ export function createTelegramWorkerSupervisor(
     terminate(entry);
   };
 
-  const stop = (worker: string | number): TelegramWorkerSupervisorResult => {
+  const resolveEntry = (worker: string | number): ManagedEntry | undefined => {
+    // A stable worker id or a spec name resolves to the same directory-derived worker.
+    if (typeof worker === "string") {
+      const bySpec = findManagedBySpec(worker);
+      if (bySpec) return bySpec;
+    }
     const pid = resolvePid(worker);
-    if (pid === undefined) return { ok: false, message: `Invalid worker: ${worker}` };
-    const entry = managed.get(pid);
-    if (!entry) return { ok: false, message: `Unknown managed worker: ${pid}` };
+    return pid === undefined ? undefined : managed.get(pid);
+  };
+
+  const stop = (worker: string | number): TelegramWorkerSupervisorResult => {
+    const entry = resolveEntry(worker);
+    if (!entry) return { ok: false, message: `Unknown managed worker: ${String(worker)}` };
     if (!entry.stopping) {
       entry.stopping = true;
       entry.state = "stopping";
       void drainAndTerminate(entry);
     }
-    return { ok: true, message: `Stopping ${entry.specName} (pid ${pid}).` };
+    return { ok: true, message: `Stopping ${entry.specName} (pid ${entry.pid}).` };
   };
 
   const restart = (worker: string | number): TelegramWorkerSupervisorResult => {
-    const pid = resolvePid(worker);
-    if (pid === undefined) return { ok: false, message: `Invalid worker: ${worker}` };
-    const entry = managed.get(pid);
-    if (!entry) return { ok: false, message: `Unknown managed worker: ${pid}` };
+    const entry = resolveEntry(worker);
+    if (!entry) return { ok: false, message: `Unknown managed worker: ${String(worker)}` };
     entry.restartRequested = true;
-    return stop(pid);
+    return stop(entry.specName);
   };
 
   function handleExit(entry: ManagedEntry, code: number | null): void {
@@ -520,6 +553,7 @@ export function createTelegramWorkerSupervisor(
           ...(live.model ? { model: live.model } : {}),
         };
       }),
+    launchAudit: () => [...launchAudit],
     dispose: () => {
       for (const entry of managed.values()) {
         if (entry.killTimer) clearTimeout(entry.killTimer);

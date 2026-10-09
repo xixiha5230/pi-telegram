@@ -51,6 +51,33 @@ test("Worker registry rejects a worker id rebound to a different process birth",
   assert.deepEqual(conflict, { ok: false, reason: "worker-conflict" });
 });
 
+test("Worker registry replaces a stable id only when the predecessor is proven dead", () => {
+  const liveness = new Map<string, "alive" | "dead" | "unverifiable">();
+  const registry = createTelegramWorkerRegistry({
+    getProcessBirthLiveness: (processBirthId) =>
+      liveness.get(processBirthId) ?? "unverifiable",
+  });
+  assert.equal(registry.register(registerInput()).ok, true);
+  // Unverifiable and alive predecessors keep the id.
+  assert.deepEqual(
+    registry.register(registerInput({ processBirthId: "1234:other" })),
+    { ok: false, reason: "worker-conflict" },
+  );
+  liveness.set("1234:born", "alive");
+  assert.deepEqual(
+    registry.register(registerInput({ processBirthId: "1234:other" })),
+    { ok: false, reason: "worker-conflict" },
+  );
+  // A proven-dead predecessor releases the id to the new process birth.
+  liveness.set("1234:born", "dead");
+  const replacement = registry.register(
+    registerInput({ processBirthId: "1234:other", runtimeGeneration: 11 }),
+  );
+  assert.equal(replacement.ok, true);
+  if (!replacement.ok) return;
+  assert.equal(replacement.worker.processBirthId, "1234:other");
+});
+
 test("Worker registry rejects a stale runtime generation and accepts a newer replacement", () => {
   const registry = createTelegramWorkerRegistry();
   const first = registry.register(registerInput({ runtimeGeneration: 10 }));
@@ -212,4 +239,24 @@ test("Only live managed workers are resumed after a daemon restart", () => {
     { workerId: "a", cwd: "/repo/plugins", sessionId: "session-a" },
     { workerId: "f", cwd: "/repo/docs", sessionId: "s" },
   ]);
+});
+
+test("A managed worker that never wrote a session is still resumable by directory", () => {
+  const selected = selectTelegramResumableManagedWorkers([
+    {
+      workerId: "a",
+      kind: "managed",
+      pid: 1,
+      processBirthId: "1:born",
+      runtimeGeneration: 1,
+      cwd: "/repo/plugins",
+      sessionId: "",
+      connectedAtMs: 1,
+      lastSeenMs: 1,
+      capabilities: [],
+    },
+  ]);
+  // No recorded session: the daemon relaunches the directory, and the worker's stable
+  // profile key reuses the same Telegram Thread instead of provisioning a new one.
+  assert.deepEqual(selected, [{ workerId: "a", cwd: "/repo/plugins" }]);
 });

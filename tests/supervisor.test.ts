@@ -165,6 +165,25 @@ test("A missing resumed session falls back to a fresh session once", async () =>
   assert.equal(supervisor.list()[0]?.state, "running");
 });
 
+test("Supervisor records a redacted launch audit and accepts a spec name for stop", () => {
+  const fake = createFakeSpawn();
+  const supervisor = supervisorWith(fake.spawn);
+  supervisor.startPath("/work/plugins", { sessionId: "01a0cc61-cdfa-7198" });
+  const audit = supervisor.launchAudit();
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0]?.spec, "plugins");
+  assert.equal(audit[0]?.cwd, "/work/plugins");
+  assert.equal(audit[0]?.session, "resume");
+  assert.equal(audit[0]?.trust, "approve");
+  assert.equal(audit[0]?.restart, "on-failure");
+  assert.equal(typeof audit[0]?.startedAtMs, "number");
+  // The audit is redacted: no environment, arguments, or token material.
+  assert.equal(JSON.stringify(audit).includes("PI_TELEGRAM"), false);
+  // A directory-derived spec name resolves to the same worker as its pid.
+  assert.equal(supervisor.stop("plugins").ok, true);
+  assert.equal(supervisor.stop(9999).ok, false);
+});
+
 test("Crash loops stay bounded because attempts accumulate across respawns", async () => {
   const fake = createFakeSpawn();
   const supervisor = createTelegramWorkerSupervisor({

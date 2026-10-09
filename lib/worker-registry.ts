@@ -111,6 +111,14 @@ export function selectTelegramResumableManagedWorkers(
 export interface TelegramWorkerRegistryOptions {
   /** Called after a structural change worth persisting (not on heartbeat). */
   onChange?: () => void;
+  /**
+   * Process-birth liveness for a stable worker id. A new process birth may replace a
+   * predecessor only when that predecessor is proven dead; an alive or unverifiable
+   * predecessor keeps the id, so a live worker is never silently replaced.
+   */
+  getProcessBirthLiveness?: (
+    processBirthId: string,
+  ) => "alive" | "dead" | "unverifiable";
 }
 
 export interface TelegramWorkerRegistry {
@@ -157,12 +165,16 @@ export function createTelegramWorkerRegistry(
     }
     const existing = workers.get(input.workerId);
     if (existing && existing.state !== "offline") {
-      // A live worker id is bound to one process birth for its lifetime.
+      // A stable worker id may be re-registered by a new process birth once the
+      // previous process is proven dead; otherwise the id stays bound to its birth.
       if (existing.processBirthId !== input.processBirthId) {
-        return { ok: false, reason: "worker-conflict" };
-      }
-      // Runtime generation only moves forward for one worker id.
-      if (input.runtimeGeneration < existing.runtimeGeneration) {
+        const predecessorLiveness =
+          options.getProcessBirthLiveness?.(existing.processBirthId) ?? "unverifiable";
+        if (predecessorLiveness !== "dead") {
+          return { ok: false, reason: "worker-conflict" };
+        }
+      } else if (input.runtimeGeneration < existing.runtimeGeneration) {
+        // Runtime generation only moves forward for one worker id and process birth.
         return { ok: false, reason: "stale-generation" };
       }
     } else if (!existing && workers.size >= TELEGRAM_WORKER_REGISTRY_CAPACITY) {

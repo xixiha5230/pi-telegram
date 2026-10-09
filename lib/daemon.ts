@@ -11,6 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { readdirSync, realpathSync, statSync } from "node:fs";
 import * as Pi from "./pi.ts";
+import * as Bus from "./bus.ts";
 import * as Config from "./config.ts";
 import * as Paths from "./paths.ts";
 import { createTelegramBridge } from "./bridge.ts";
@@ -140,7 +141,13 @@ export function createTelegramDaemon(
       core.ports.recordRuntimeEvent?.("daemon", error, { phase: "persist" });
     }
   };
-  const workers = createTelegramWorkerRegistry({ onChange: persist });
+  const workers = createTelegramWorkerRegistry({
+    onChange: persist,
+    // A stable worker id may be re-registered by a new process birth only after the
+    // previous process is proven dead, so a worker restart keeps the same identity.
+    getProcessBirthLiveness: (processBirthId) =>
+      Bus.getTelegramProcessBirthIdentityLiveness(processBirthId),
+  });
   const routes = createTelegramRouteRegistry({ onChange: persist });
   const epoch = randomUUID();
   routes.adoptEpoch(epoch);
@@ -197,15 +204,19 @@ export function createTelegramDaemon(
     // the leader as ordinary followers, so the supervisor's managed pid set is the
     // filter: an operator-started terminal Pi keeps its own Thread but stays out.
     try {
-      const managedPids = new Set(
-        (supervisor?.list() ?? []).map((entry) => entry.pid),
+      const managedEntries = supervisor?.list() ?? [];
+      const specByPid = new Map(
+        managedEntries.map((entry) => [entry.pid, entry.spec] as const),
       );
       const liveIds = new Set<string>();
       for (const follower of core.ports.busFollowers.list()) {
         const pid = follower.pid;
         if (!Number.isSafeInteger(pid) || (pid as number) <= 0) continue;
-        if (!managedPids.has(pid as number)) continue;
-        const workerId = follower.instanceId;
+        const spec = specByPid.get(pid as number);
+        if (!spec) continue;
+        // Directory-derived stable identity: a worker process restart keeps its id,
+        // so routes and attachments survive a respawn.
+        const workerId = `worker:${spec}`;
         liveIds.add(workerId);
         const cwd = follower.cwd ?? "";
         const sessionId = follower.sessionId ?? "";
@@ -301,15 +312,9 @@ export function createTelegramDaemon(
   // supervisor knows it by its directory-derived spec name. Resolve one to the other
   // through the live follower pid so dialogs target the worker's real Thread.
   const resolveWorkerUiRoute = (specName: string) => {
-    const entry = supervisor?.list().find((worker) => worker.spec === specName);
-    if (!entry) return undefined;
-    const follower = core.ports.busFollowers
-      .list()
-      .find((candidate) => candidate.pid === entry.pid);
-    if (!follower) return undefined;
     const route = routes
       .list()
-      .find((candidate) => candidate.workerId === follower.instanceId);
+      .find((candidate) => candidate.workerId === `worker:${specName}`);
     return route
       ? {
           target: route.target,
@@ -470,8 +475,18 @@ export function createTelegramDaemon(
       return { ok: false, alert: "Could not reach that worker's thread." };
     }
   };
+  /** Resolve a live bus follower from a stable managed-worker id. */
+  const resolveFollowerByWorkerId = (workerId: string) => {
+    if (!workerId.startsWith("worker:")) return undefined;
+    const spec = workerId.slice("worker:".length);
+    const entry = supervisor?.list().find((worker) => worker.spec === spec);
+    if (!entry) return undefined;
+    return core.ports.busFollowers
+      .list()
+      .find((candidate) => candidate.pid === entry.pid);
+  };
   const cancelWorkerUiForWorkerId = (workerId: string): void => {
-    const follower = core.ports.busFollowers.get(workerId);
+    const follower = resolveFollowerByWorkerId(workerId);
     if (follower?.pid === undefined) return;
     const entry = supervisor?.list().find((worker) => worker.pid === follower.pid);
     if (entry) workerUi?.cancelWorker(entry.spec);
@@ -485,7 +500,7 @@ export function createTelegramDaemon(
     workerId: string;
     target: { chatId: number; threadId?: number };
   }): Promise<{ ok: boolean; message: string }> => {
-    const follower = core.ports.busFollowers.get(input.workerId);
+    const follower = resolveFollowerByWorkerId(input.workerId);
     const workerTarget = follower?.target;
     const registrationGeneration =
       follower?.registrationGeneration ??
@@ -551,7 +566,7 @@ export function createTelegramDaemon(
     if (!record) {
       return { ok: false, message: "This thread had no attached Pi worker." };
     }
-    const follower = core.ports.busFollowers.get(record.workerId);
+    const follower = resolveFollowerByWorkerId(record.workerId);
     const currentTarget = follower?.target;
     const replaced = await core.ports.replaceFollowerServeTarget({
       record: { instanceId: record.workerId },
@@ -591,11 +606,15 @@ export function createTelegramDaemon(
               start: async (target) => supervisor.startPath(target),
               stop: async (worker) => {
                 cancelWorkerUiForWorkerId(worker);
-                return supervisor.stop(worker);
+                return supervisor.stop(
+                  worker.startsWith("worker:") ? worker.slice("worker:".length) : worker,
+                );
               },
               restart: async (worker) => {
                 cancelWorkerUiForWorkerId(worker);
-                return supervisor.restart(worker);
+                return supervisor.restart(
+                  worker.startsWith("worker:") ? worker.slice("worker:".length) : worker,
+                );
               },
               attach: attachWorkerTarget,
               detach: detachWorkerTarget,
