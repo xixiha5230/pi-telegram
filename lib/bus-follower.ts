@@ -18,6 +18,7 @@ import type {
 } from "./queue.ts";
 import type { TelegramBusFollowerActivity } from "./bus.ts";
 import type { TelegramTarget } from "./target.ts";
+import type { TelegramWorkerControlCommand } from "./worker-control-protocol.ts";
 import {
   isTelegramApiMethodRetrySafe,
   TelegramApiCommitUnknownError,
@@ -553,6 +554,10 @@ export interface TelegramBusForwardedUpdateReceiverRuntimeDeps<TContext> {
   isSourceReferenceAdmissionEnabled?: () => boolean;
   hasAuthenticatedSourceReferenceTransport?: () => boolean;
   getContext: () => TContext | undefined;
+  workerControl?: (
+    command: TelegramWorkerControlCommand,
+    ctx: TContext,
+  ) => Promise<unknown> | unknown;
   handleInputCustodyHandoff?: (
     envelope: Extract<TelegramBusEnvelope, { kind: "leader.offerInputCustodyHandoff" }>,
     ctx: TContext,
@@ -2355,7 +2360,8 @@ export function createTelegramBusForwardedUpdateReceiverRuntime<TContext>(
           envelope.kind !== "leader.wakeInputCustody" &&
           envelope.kind !== "leader.offerInputCustodyHandoff" &&
           envelope.kind !== "leader.replaceFollowerTarget" &&
-          envelope.kind !== "leader.offerQueueHandoff") ||
+          envelope.kind !== "leader.offerQueueHandoff" &&
+          envelope.kind !== "leader.workerControl") ||
         envelope.recipientInstanceId !== deps.instanceId
       ) {
         return {
@@ -2386,6 +2392,7 @@ export function createTelegramBusForwardedUpdateReceiverRuntime<TContext>(
         envelope.kind !== "leader.replaceFollowerTarget" &&
         envelope.kind !== "leader.offerQueueHandoff" &&
         envelope.kind !== "leader.offerInputCustodyHandoff" &&
+        envelope.kind !== "leader.workerControl" &&
         (!envelope.delivery ||
           envelope.delivery.recipientBindingKey !==
             deps.getRecipientBindingKey())
@@ -2407,6 +2414,13 @@ export function createTelegramBusForwardedUpdateReceiverRuntime<TContext>(
         };
       }
       try {
+        if (envelope.kind === "leader.workerControl") {
+          if (!deps.workerControl) {
+            throw new Error("Attached worker control is unavailable.");
+          }
+          const result = await deps.workerControl(envelope.command, ctx);
+          return { kind: "bus.ack", requestId: envelope.requestId, ok: true, result };
+        }
         if (envelope.kind === "leader.offerInputCustodyHandoff") {
           if (!(deps.isSourceReferenceAdmissionEnabled?.() ?? false)) throw new Error(
             "Telegram input custody handoff capability is not enabled.",

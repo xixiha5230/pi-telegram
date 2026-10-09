@@ -519,6 +519,76 @@ test("Bus follower receiver stages authenticated queue handoff payloads", async 
   }
 });
 
+test("Attached worker control uses authenticated IPC and rejects stale registrations", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-telegram-worker-control-"));
+  const socketPath = join(dir, "worker.sock");
+  const executed: unknown[] = [];
+  const receiver = createTelegramBusForwardedUpdateReceiverRuntime({
+    socketPath,
+    instanceId: "attached-a",
+    getAuthSecret: () => "worker-control-secret",
+    getRegistrationGeneration: () => "registration-current",
+    getRecipientBindingKey: () => "binding-a",
+    getContext: () => ({ cwd: "/repo" }),
+    durableAdmission: { async admit() { throw new Error("not used"); } },
+    async workerControl(command, context) {
+      executed.push({ command, context });
+      return { accepted: true };
+    },
+  });
+  try {
+    await receiver.start();
+    const accepted = await sendTelegramBusLocalEnvelope({
+      socketPath,
+      envelope: {
+        kind: "leader.workerControl",
+        requestId: "leader-control:1",
+        auth: "worker-control-secret",
+        recipientInstanceId: "attached-a",
+        recipientRegistrationGeneration: "registration-current",
+        command: { type: "prompt", message: "hello" },
+        sentAtMs: Date.now(),
+      },
+    });
+    assert.equal(accepted?.kind, "bus.ack");
+    assert.equal(accepted?.kind === "bus.ack" && accepted.ok, true);
+    assert.equal(executed.length, 1);
+
+    const stale = await sendTelegramBusLocalEnvelope({
+      socketPath,
+      envelope: {
+        kind: "leader.workerControl",
+        requestId: "leader-control:2",
+        auth: "worker-control-secret",
+        recipientInstanceId: "attached-a",
+        recipientRegistrationGeneration: "registration-old",
+        command: { type: "abort" },
+        sentAtMs: Date.now(),
+      },
+    });
+    assert.equal(stale?.kind === "bus.ack" && stale.ok, false);
+    assert.equal(executed.length, 1);
+
+    const unauthorized = await sendTelegramBusLocalEnvelope({
+      socketPath,
+      envelope: {
+        kind: "leader.workerControl",
+        requestId: "leader-control:3",
+        auth: "wrong-secret",
+        recipientInstanceId: "attached-a",
+        recipientRegistrationGeneration: "registration-current",
+        command: { type: "abort" },
+        sentAtMs: Date.now(),
+      },
+    });
+    assert.equal(unauthorized?.kind === "bus.ack" && unauthorized.ok, false);
+    assert.equal(executed.length, 1);
+  } finally {
+    await receiver.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("Bus follower receiver handles leader-forwarded updates and target replacement", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-telegram-bus-forward-"));
   const leaderSocketPath = join(dir, "leader.sock");

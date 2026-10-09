@@ -7,7 +7,7 @@
 
 **Approved design direction. Partially implemented.** This document owns the durable contract for an external `pi-telegram-daemon` control plane that can start, stop, and switch live Pi workers from Telegram. It supersedes the in-process-only assumptions of [Telegram Multi-Instance Bus](./multi-instance-bus.md) where they conflict; the bus document remains canonical for the current shipped runtime until this contract is implemented.
 
-P0 (ownership decoupling) has landed in the extension: `cwd` no longer fences transport ownership, a cross-project session switch keeps the same live owner, and `owners.json` retains `cwd` only as a same-directory restart hint. P1 skeleton has also landed: the host boundary (`lib/host.ts`, `lib/pi-host.ts`), the host-parameterized core assembly (`lib/bridge.ts` with `TelegramBridgeCore.ports`), the daemon host/entry (`lib/daemon-host.ts`, `lib/daemon.ts`), the `pi-telegram-daemon` bin, the in-memory worker and epoch-fenced route registries (`lib/worker-registry.ts`, `lib/route-registry.ts`), the RPC channel client (`lib/rpc-client.ts`), launch-spec validation/planning (`lib/worker-spec.ts`), and the worker control surface (`lib/worker-control.ts`). Because P0 made `cwd` non-identity, the daemon simply reuses the existing `owners.json` transport lock; no separate daemon lease is needed. Live smoke passed: the daemon owned transport as leader, polled, published the bus socket, and a real headless `pi --mode rpc` instance registered as an attached follower over the existing bus with a provisioned thread that was cleaned on disconnect. The registries persist atomically to `tmp/telegram/daemon.json` and restore across a daemon restart, and daemon command routing serves `/workers`, `/attach`, and `/detach` from the public pre-routing update-handler registry with a reconcile loop mirroring live bus followers. Live smoke passed: the daemon owned transport as leader, polled, published the bus socket, and a real headless `pi --mode rpc` instance registered as an attached follower over the existing bus with a provisioned thread that was cleaned on disconnect. Managed-worker supervision and process spawning, and token relocation remain unimplemented, so the daemon is not yet an operational control plane. Until those land, [architecture.md](./architecture.md#runtime-ownership) and [AGENTS.md](../AGENTS.md) remain authoritative for the runtime. This document does not authorize live process spawning, token relocation, or removal of the recorded restart hint.
+P0 (ownership decoupling) has landed in the extension: `cwd` no longer fences transport ownership, a cross-project session switch keeps the same live owner, and `owners.json` retains `cwd` only as a same-directory restart hint. The P1 host boundary, daemon entry, worker/route registries, snapshots, RPC channel, launch planning, control panel, and managed-worker supervisor are implemented. Managed workers currently join the existing authenticated follower bus; their updates use the bridge's existing journaled follower-forwarding path. An additional generation-fenced `leader.workerControl` envelope now routes allowlisted Pi-context operations over that bus, and the real attached receiver/leader routing path is covered by local-socket tests. A real local `pi --mode rpc` `get_state` smoke passed with extensions/network disabled. Managed workers now receive only a daemon-provisioned bot identity digest: their config store exposes no raw token and keys journals, workspace admission, queue transport stamps, and paired-user admission from that digest, while the daemon keeps the raw token for transport. Still incomplete: attached-worker registration is still the existing follower registration rather than a tokenless daemon protocol, attached-worker dialog forwarding is not implemented, session/queue controls absent from `ExtensionContext` reject explicitly, and the full Telegram delivery path has not been live-smoked. Managed-worker `select`/`confirm`/`input`/`editor` dialogs do render through a bounded, generation-fenced Telegram bridge. Until those land, [architecture.md](./architecture.md#runtime-ownership) and [AGENTS.md](../AGENTS.md) remain authoritative for the runtime.
 
 ## Purpose
 
@@ -269,6 +269,8 @@ catalog file to maintain.
 
 - The spawned command is `pi --mode rpc --approve`. Extensions stay enabled, so the
   worker loads the operator's normal provider packages and user configuration.
+- Every launch declares `PI_TELEGRAM_DAEMON_WORKER=1`, so the worker is permanently
+  non-leading and can never race or succeed the daemon for transport ownership.
 - The daemon strips Pi session-descriptor variables (`PI_SESSION_ID`,
   `PI_SESSION_FILE`, `PI_PROVIDER`, `PI_MODEL`, `PI_REASONING_LEVEL`) before spawn.
   Those describe the *daemon's* session, not the worker's, so a managed worker always
@@ -374,9 +376,9 @@ The daemon reconciles its projection from `get_state`, `clear_queue` results, an
 
 ## Delivery And Rendering Ownership
 
-- **Managed worker**: the daemon reads the RPC event stream directly and owns previews, activity, final rendering, files, voice, buttons, and queue views. The worker extension must not also deliver these surfaces, to prevent double delivery.
-- **Attached worker**: the extension delivers through the daemon over IPC, preserving the existing preview/activity/queue behavior.
-- Both paths run through the same daemon-side rendering, redaction, target fencing, and reply-dedup.
+- **Managed worker**: the worker runs the same bridge extension a terminal Pi runs, so its own bridge owns previews, activity, final rendering, files, voice, buttons, and queue views, and reaches Telegram through the daemon-owned transport (follower `callApi` proxy) and the daemon's forwarded updates. The daemon never re-renders worker output.
+- **Attached worker**: identical. The extension delivers through the same follower bus, preserving one rendering implementation across both worker kinds.
+- The daemon holds the RPC channel only for supervision (state projection, drain, dialogs, control), never for user-facing rendering, so there is no second surface that could drift.
 
 ## Durable Admission And Settlement
 
@@ -387,29 +389,31 @@ The daemon reconciles its projection from `get_state`, `clear_queue` results, an
 
 ## Protocol
 
-The daemon is the IPC server. Envelopes are authenticated and generation-fenced, extending the existing bus contract:
+Worker control extends the existing authenticated, generation-fenced bus. The daemon is the bus leader; workers register as ordinary followers over local IPC and then use the existing follower protocol for delivery and control:
 
 ```text
-worker.register   { workerId?, pid, processBirthId, runtimeGeneration, kind, cwd, sessionId, protocol, capabilities }
-worker.heartbeat  { runtimeGeneration, sessionId, cwd, state, queueDepth }
-worker.event      { activity | preview | tool | compaction | settled }        # attached rendering
-daemon.deliver    { deliveryId, updateId, turn, target }                      # inbound routing
-worker.ack        { deliveryId, updateId, outcome: accepted | retryable | terminal-rejected }
-daemon.command    { commandId, kind, args }                                   # attached control port
-worker.result     { commandId, ok, data }
-worker.ui         { requestId, method, args } / { requestId, value | confirmed | cancelled }
-daemon.route      { target, workerId, epoch }
+follower.register / follower.heartbeat / follower.disconnect   # existing bus lifecycle
+leader.forwardMessage | leader.forwardCallback | leader.forwardReaction   # inbound routing (journaled)
+follower.callApi                                               # worker Bot API proxy through the daemon
+leader.workerControl { recipientInstanceId, recipientRegistrationGeneration, command }
+bus.ack              { ok, result | message }
 ```
 
-- Managed workers may satisfy control through RPC; the IPC control envelope is authoritative for attached workers.
-- Registration is rejected on protocol mismatch, unknown identity, or unauthorized credential before any route is published.
+- Managed workers additionally expose their own `pi --mode rpc` channel to the daemon for supervision (state projection, drain, dialogs, control), which is not part of the bus protocol.
+- The daemon owns the inbound journal and the transport lock; a forwarded update is admitted and acknowledged through the existing follower durable-admission path before the worker executes it.
+- The daemon holds the RPC channel only for supervision (state projection, drain, dialogs, control), never for user-facing rendering.
+- Registration is still the existing follower registration, not a standalone tokenless daemon registration. Do not infer separate worker credentials or bot-token isolation from bus authentication.
 - `daemon.route` and thread mutations are CAS-fenced by the daemon `epoch`.
+
+### Worker control commands
+
+`leader.workerControl` carries exactly one allowlisted command: `prompt`, `steer`, `abort`, `clear_queue`, `compact`, `set_model`, `set_thinking_level`, `new_session`, `switch_session`, or `get_state`. Arbitrary shell is rejected, and `prompt`/`steer` payloads beginning with a slash command are rejected rather than forwarded as Pi slash commands. The Pi `ExtensionContext` adapter implements `prompt`, `steer`, `abort`, `compact`, `set_model`, `set_thinking_level`, and `get_state`; `clear_queue`, `new_session`, and `switch_session` need command-context authority and currently return an explicit error instead of guessing.
 
 ## Extension UI Bridge
 
-- Managed: the daemon answers `extension_ui_request` on the RPC channel and translates dialogs to Telegram inline UI.
-- Attached: the extension forwards Telegram-originated dialogs to the daemon over IPC; terminal-originated dialogs stay in the terminal.
-- Fire-and-forget UI (`notify`, `setStatus`, `setTitle`) may be shown, downgraded, or dropped; dialog methods always resolve to exactly one response or a cancellation.
+- Managed: the daemon answers `extension_ui_request` on the RPC channel and translates `select`, `confirm`, `input`, and `editor` dialogs into bounded one-shot Telegram prompts (`lib/worker-ui.ts`). Each dialog is capped (32 live dialogs, 60 options, 4,000 characters) and times out after two minutes; the callback is generation-fenced, so a replaced registration cancels instead of answering the new worker. `notify` is projected as a plain notice; `setStatus`, `setTitle`, `setWidget`, and `set_editor_text` have no safe generic phone-width equivalent and are dropped.
+- Attached: the extension still forwards Telegram-originated dialogs to the daemon over IPC. This path is not implemented yet; the receiver only carries the allowlisted control envelope.
+- Fire-and-forget UI (`notify`, `setStatus`, `setTitle`) may be shown, downgraded, or dropped; dialog methods always resolve to exactly one response or a cancellation. A malformed or over-capacity dialog resolves `cancelled` rather than stalling the worker.
 
 ## Credentials And Secrets
 
@@ -422,10 +426,8 @@ Two independent secrets with different scopes:
 | Leak impact | Full bot control | Registration of one local worker |
 | Lifetime | Profile configuration | Minted at registration, rotated on re-registration, bound to `workerId` + generation |
 
-- A worker never receives the bot token. It receives the profile name, the daemon endpoint, and its worker credential.
-- The extension must support token-less worker startup: identity digests come from the daemon instead of hashing a locally read token.
-- `/telegram-setup`, pairing, and `allowedUserId` live in the daemon. Workers may not create owners.
-- Credentials are persisted `0600` under the agent temp directory, are never logged raw, and never enter model context.
+- **Current limitation:** managed workers load the operator's shared Pi configuration and Telegram profile file; the bot token is not daemon-exclusive yet. The planned per-worker credential and tokenless startup boundary are not implemented.
+- `/telegram-setup`, pairing, and `allowedUserId` therefore remain shared-config behavior for now; do not treat the aspirational table above as a shipped security guarantee.
 
 ## Security Boundaries
 
@@ -458,9 +460,9 @@ The change is a control-plane generalization, not a rewrite:
 ## Phasing
 
 - **P0 — Contract and ownership decoupling.** Publish this contract; remove `cwd` from transport ownership; keep standalone behavior working on the shared contracts. Resolves the self-conflict/lockout class.
-- **P1 — External daemon and attached workers.** Landed as code: `pi-telegram-daemon` transport ownership, worker/route registries, RPC client, directory-picker launch, and the worker control surface. Remaining: durable registries, attached-worker IPC registration, and wiring `/workers`/`/attach` into live Telegram routing.
-- **P2 — Managed workers and supervision.** Spawn/stop/restart `pi --mode rpc` workers from an operator-supplied absolute directory (picker or path); graceful drain; `on-failure` restart; `/workers start|stop|restart`.
-- **P3 — Unification and hardening.** Single `WorkerControlPort` across both kinds; UI bridge parity; thread re-alignment polish; diagnostics and redaction review.
+- **P1 — External daemon and attached workers.** Landed: daemon transport ownership, registries/snapshots, RPC client, directory picker, control panel, supervisor, and a generation-fenced allowlisted control envelope over the existing follower bus. Remaining: standalone tokenless worker registration, complete daemon-delivery ownership validation, and end-to-end production wiring.
+- **P2 — Managed workers and supervision.** Launch/readiness/resume/fallback/restart/drain/abort/escalation are unit-tested; a real local `pi --mode rpc` `get_state` smoke passed with network and extensions disabled. Remaining: live daemon + managed-worker + Telegram delivery smoke and outcome/receipt verification.
+- **P3 — Unification and hardening.** Token isolation/relocation, attached-worker dialog forwarding, full session/queue control adapter parity, thread re-alignment polish, diagnostics, and redaction review. Managed-worker `select`/`confirm`/`input`/`editor` dialogs now render through the daemon's Telegram UI bridge with generation-fenced callbacks.
 
 ## Decisions Log
 

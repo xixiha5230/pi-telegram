@@ -115,6 +115,61 @@ export function getTelegramBotTokenDiagnostic(
   return `Telegram bot token environment variable ${reference.variable} is not set.`;
 }
 
+/** Daemon-provisioned worker identity digest: token SHA-256 without the raw token. */
+export const TELEGRAM_WORKER_BOT_TOKEN_SHA256_ENV =
+  "PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256";
+/** Daemon-provisioned worker bot id, paired with the digest above. */
+export const TELEGRAM_WORKER_BOT_ID_ENV = "PI_TELEGRAM_WORKER_BOT_ID";
+const TELEGRAM_BOT_TOKEN_SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+
+export interface TelegramBotIdentity {
+  tokenSha256: string;
+  botId?: number;
+}
+
+/**
+ * The daemon-provisioned worker identity, when present. A managed worker never
+ * receives the raw bot token; the daemon passes only this digest so the worker
+ * can key journals, admission, and pairing without holding transport authority.
+ * This is explicit launch configuration declared in the worker's spec env.
+ */
+export function getTelegramWorkerBotIdentity(
+  env: NodeJS.ProcessEnv = process.env,
+): TelegramBotIdentity | undefined {
+  const tokenSha256 = env[TELEGRAM_WORKER_BOT_TOKEN_SHA256_ENV]?.trim();
+  if (!tokenSha256 || !TELEGRAM_BOT_TOKEN_SHA256_PATTERN.test(tokenSha256)) {
+    return undefined;
+  }
+  const rawBotId = env[TELEGRAM_WORKER_BOT_ID_ENV]?.trim();
+  const botId =
+    rawBotId && /^[0-9]{1,20}$/u.test(rawBotId) ? Number(rawBotId) : undefined;
+  return {
+    tokenSha256,
+    ...(botId !== undefined && Number.isSafeInteger(botId) && botId > 0
+      ? { botId }
+      : {}),
+  };
+}
+
+/**
+ * The bot identity this process may use. A worker identity overrides the shared
+ * profile token, so a daemon-managed worker derives its digests from the daemon
+ * rather than hashing a locally read token.
+ */
+export function resolveTelegramBotIdentity(
+  config: Pick<TelegramConfig, "botToken" | "botId">,
+  env: NodeJS.ProcessEnv = process.env,
+): TelegramBotIdentity | undefined {
+  const workerIdentity = getTelegramWorkerBotIdentity(env);
+  if (workerIdentity) return workerIdentity;
+  const token = resolveTelegramBotToken(config.botToken, env);
+  if (!token) return undefined;
+  return {
+    tokenSha256: createHash("sha256").update(token).digest("hex"),
+    ...(config.botId !== undefined ? { botId: config.botId } : {}),
+  };
+}
+
 export type TelegramOutboundCommandTemplateConfig =
   string | CommandTemplateObjectConfig;
 export interface TelegramOutboundHandlerConfig extends CommandTemplateObjectConfig {
@@ -285,7 +340,10 @@ export interface TelegramConfigStore {
   getActiveProfileName: () => string | undefined;
   getBotToken: () => string | undefined;
   getBotTokenDiagnostic: () => string | undefined;
+  /** Bot identity digest, present for a leader or a daemon-provisioned worker. */
+  getBotIdentity: () => TelegramBotIdentity | undefined;
   hasBotToken: () => boolean;
+  hasBotIdentity: () => boolean;
   getAllowedUserId: () => number | undefined;
   getLegacyPollingCursor: () => number | undefined;
   removeLegacyPollingCursor: () => void;
@@ -782,12 +840,18 @@ export function createTelegramConfigStore(
     return withTelegramFileTransaction(`${configPath}.transaction`, () => {
       const latest = readTelegramConfigForTransaction(configPath);
       const profile = latest.profiles?.[profileName];
-      const resolvedToken =
-        typeof profile?.botToken === "string"
+      const workerIdentity = getTelegramWorkerBotIdentity(env);
+      const resolvedToken = workerIdentity
+        ? undefined
+        : typeof profile?.botToken === "string"
           ? resolveTelegramBotToken(profile.botToken, env)
           : undefined;
-      if (!profile || !resolvedToken ||
-          createHash("sha256").update(resolvedToken).digest("hex") !== tokenSha256 ||
+      const admissionSha256 =
+        workerIdentity?.tokenSha256 ??
+        (resolvedToken
+          ? createHash("sha256").update(resolvedToken).digest("hex")
+          : undefined);
+      if (!profile || !admissionSha256 || admissionSha256 !== tokenSha256 ||
           (profile.allowedUserId !== undefined &&
             (!Number.isSafeInteger(profile.allowedUserId) || profile.allowedUserId <= 0))) {
         throw new Error("Telegram pairing admission authority is unavailable or changed.");
@@ -826,10 +890,17 @@ export function createTelegramConfigStore(
       return true;
     },
     getActiveProfileName: () => activeProfileName,
-    getBotToken: () => resolveTelegramBotToken(getEffectiveConfig().botToken, env),
+    getBotToken: () =>
+      getTelegramWorkerBotIdentity(env)
+        ? undefined
+        : resolveTelegramBotToken(getEffectiveConfig().botToken, env),
     getBotTokenDiagnostic: () =>
-      getTelegramBotTokenDiagnostic(getEffectiveConfig().botToken, env),
-    hasBotToken: () => !!resolveTelegramBotToken(getEffectiveConfig().botToken, env),
+      getTelegramWorkerBotIdentity(env)
+        ? undefined
+        : getTelegramBotTokenDiagnostic(getEffectiveConfig().botToken, env),
+    getBotIdentity: () => resolveTelegramBotIdentity(getEffectiveConfig(), env),
+    hasBotToken: () => !!resolveTelegramBotIdentity(getEffectiveConfig(), env),
+    hasBotIdentity: () => !!resolveTelegramBotIdentity(getEffectiveConfig(), env),
     getAllowedUserId: () => getEffectiveConfig().allowedUserId,
     getLegacyPollingCursor: () =>
       (getEffectiveConfig() as TelegramConfig & TelegramLegacyCursorCarrier)

@@ -5,6 +5,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdtempSync,
@@ -394,13 +395,13 @@ test("Workspace admission runtime binds profile paths to stable bot identity", (
     );
     const firstProfileKey = createTelegramWorkspaceAdmissionProfileKey({
       profileName: "work",
-      botToken: "secret-a",
+      tokenSha256: createHash("sha256").update("secret-a").digest("hex"),
     });
     assert.notEqual(
       firstProfileKey,
       createTelegramWorkspaceAdmissionProfileKey({
         profileName: "work",
-        botToken: "secret-b",
+        tokenSha256: createHash("sha256").update("secret-b").digest("hex"),
       }),
     );
     assert.equal(firstProfileKey.includes("secret"), false);
@@ -409,7 +410,10 @@ test("Workspace admission runtime binds profile paths to stable bot identity", (
     let botToken = "secret-default";
     const runtime = createTelegramWorkspaceAdmissionRuntimeBinding({
       getProfileName: () => activeProfile,
-      getBotToken: () => botToken,
+      getBotIdentity: () =>
+        botToken
+          ? { tokenSha256: createHash("sha256").update(botToken).digest("hex") }
+          : undefined,
       getPath: (profileName) =>
         resolveTelegramWorkspaceAdmissionPath(temp.dir, profileName),
       owner,

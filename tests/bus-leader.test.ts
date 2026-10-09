@@ -14,6 +14,7 @@ import {
   createTelegramBusFollowerRegistry,
   createTelegramBusLocalServer,
   createTelegramBusProtocolIdentity,
+  type TelegramBusEnvelope,
   resolveTelegramBusSocketPath,
   sendTelegramBusLocalEnvelope,
   TELEGRAM_BUS_CAPABILITY_DURABLE_FOLLOWER_ADMISSION,
@@ -4680,6 +4681,59 @@ test("Leader display application fences late profile and follower-generation cha
       await runtime.stopPolling();
       rmSync(dir, { recursive: true, force: true });
     }
+  }
+});
+
+test("Leader routes attached worker control over the authenticated follower IPC", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-telegram-leader-worker-control-"));
+  const leaderSocketPath = join(dir, "leader.sock");
+  const followerSocketPath = join(dir, "worker.sock");
+  const registry = createTelegramBusFollowerRegistry();
+  registry.register({
+    instanceId: "worker-a",
+    busSocketPath: followerSocketPath,
+    registrationGeneration: "generation-a",
+    connectedAtMs: 1,
+  });
+  let received: TelegramBusEnvelope | undefined;
+  const followerServer = createTelegramBusLocalServer({
+    socketPath: followerSocketPath,
+    handleEnvelope(envelope) {
+      received = envelope;
+      return {
+        kind: "bus.ack",
+        requestId: envelope.requestId,
+        ok: true,
+        result: { accepted: true },
+      };
+    },
+  });
+  const runtime = createRawTelegramBusLeaderRuntime({
+    socketPath: leaderSocketPath,
+    followerRegistry: registry,
+    authSecret: "leader-secret",
+    protocolIdentity: TEST_BUS_PROTOCOL_IDENTITY,
+    startPolling: () => undefined,
+    stopPolling: () => undefined,
+  });
+  try {
+    await followerServer.start();
+    const result = await runtime.workerControl("worker-a", { type: "abort" });
+    assert.deepEqual(result, { accepted: true });
+    assert.equal(received?.kind, "leader.workerControl");
+    if (received?.kind !== "leader.workerControl") assert.fail("Missing worker control envelope");
+    assert.equal(received.auth, "leader-secret");
+    assert.equal(received.recipientRegistrationGeneration, "generation-a");
+    assert.deepEqual(received.command, { type: "abort" });
+    assert.equal(registry.get("worker-a")?.lastHeartbeatMs !== 1, true);
+    await assert.rejects(
+      runtime.workerControl("unknown", { type: "abort" }),
+      /not registered/u,
+    );
+  } finally {
+    await followerServer.stop();
+    await runtime.stopPolling();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 

@@ -92,6 +92,8 @@ test("Worker launch planning builds an explicit rpc invocation", () => {
   assert.equal(plan.env.PI_TELEGRAM_DAEMON, undefined);
   assert.equal(plan.env.PI_TELEGRAM_WORKER_TOKEN, undefined);
   assert.equal(plan.env.PI_TELEGRAM_FOLLOWER_OWNER_ID, "worker:plugins");
+  // A managed worker must never race the daemon for transport ownership.
+  assert.equal(plan.env.PI_TELEGRAM_DAEMON_WORKER, "1");
   const other = validate({ name: "docs", cwd: "/work/docs" });
   assert.equal(other.ok, true);
   if (other.ok) {
@@ -101,4 +103,17 @@ test("Worker launch planning builds an explicit rpc invocation", () => {
       "worker:docs",
     );
   }
+  // The daemon provisions only the bot identity digest; the worker never gets the token.
+  const digest = "a".repeat(64);
+  const identified = planTelegramWorkerLaunch(spec, {
+    executable: "pi",
+    identityEnv: {
+      PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256: digest,
+      PI_TELEGRAM_WORKER_BOT_ID: "42",
+    },
+  });
+  assert.equal(identified.env.PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256, digest);
+  assert.equal(identified.env.PI_TELEGRAM_WORKER_BOT_ID, "42");
+  assert.equal(identified.env.PI_TELEGRAM_DAEMON_WORKER, "1");
+  assert.equal(identified.env.PI_TELEGRAM_FOLLOWER_OWNER_ID, "worker:plugins");
 });

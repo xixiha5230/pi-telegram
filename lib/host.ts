@@ -34,6 +34,10 @@ export interface TelegramBridgeHost {
   api: Pi.ExtensionAPI;
   ports: Pi.PiExtensionApiRuntimePorts;
   helpers: TelegramBridgeHostHelpers;
+  workerControl: (
+    command: import("./worker-control-protocol.ts").TelegramWorkerControlCommand,
+    ctx: Pi.ExtensionContext,
+  ) => Promise<unknown>;
   /**
    * Overrides the cluster leadership policy for this host. The external daemon
    * sets this to always allow leadership, since `cluster.leader: "daemon"`

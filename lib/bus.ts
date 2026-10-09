@@ -48,6 +48,10 @@ import {
   TELEGRAM_QUEUE_HANDOFF_PAYLOAD_MAX_BYTES,
   type TelegramQueueHandoffPayload,
 } from "./queue.ts";
+import {
+  parseTelegramWorkerControlCommand,
+  type TelegramWorkerControlCommand,
+} from "./worker-control-protocol.ts";
 import type { TelegramTarget } from "./target.ts";
 import type { TelegramThreadDisplayMode } from "./config.ts";
 import { isProcessAlive } from "./locks.ts";
@@ -1000,6 +1004,14 @@ export type TelegramBusEnvelope = (
       sentAtMs: number;
     }
   | {
+      kind: "leader.workerControl";
+      requestId: string;
+      recipientInstanceId: string;
+      recipientRegistrationGeneration: string;
+      command: TelegramWorkerControlCommand;
+      sentAtMs: number;
+    }
+  | {
       kind: "follower.callApi";
       requestId: string;
       instanceId: string;
@@ -1177,6 +1189,9 @@ export function parseTelegramBusEnvelope(
       break;
     case "follower.callApi":
       envelope = parseCallApiEnvelope(value, requestId);
+      break;
+    case "leader.workerControl":
+      envelope = parseWorkerControlEnvelope(value, requestId);
       break;
     case "bus.ack":
       envelope = parseAckEnvelope(value, requestId);
@@ -2943,6 +2958,25 @@ function parseRouteAgentMessageEnvelope(
     },
     sentAtMs: value.sentAtMs,
   };
+}
+
+function parseWorkerControlEnvelope(
+  value: Record<string, unknown>,
+  requestId: string,
+): TelegramBusEnvelope | undefined {
+  const command = parseTelegramWorkerControlCommand(value.command);
+  return typeof value.recipientInstanceId === "string" &&
+    typeof value.recipientRegistrationGeneration === "string" &&
+    command && typeof value.sentAtMs === "number"
+    ? {
+        kind: "leader.workerControl",
+        requestId,
+        recipientInstanceId: value.recipientInstanceId,
+        recipientRegistrationGeneration: value.recipientRegistrationGeneration,
+        command,
+        sentAtMs: value.sentAtMs,
+      }
+    : undefined;
 }
 
 function parseCallApiEnvelope(

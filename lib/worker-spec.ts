@@ -29,6 +29,14 @@ export interface TelegramWorkerLaunchSpec {
 
 export const TELEGRAM_WORKER_SPEC_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/u;
 
+/**
+ * Declares that this process is a daemon-managed worker. The daemon sets it on every
+ * spawn; the Pi host reads it once to make the worker permanently non-leading, so a
+ * managed worker can never race the daemon for transport or promote after a daemon
+ * crash. It is explicit launch configuration, not inherited ambient state.
+ */
+export const TELEGRAM_DAEMON_WORKER_ENV = "PI_TELEGRAM_DAEMON_WORKER";
+
 export type TelegramWorkerSpecReason =
   | "invalid-shape"
   | "invalid-name"
@@ -188,6 +196,12 @@ export interface TelegramWorkerLaunchPlan {
 
 export interface TelegramWorkerLaunchPlanDeps {
   executable: string;
+  /**
+   * Daemon-provisioned bot identity digest for this worker. The worker receives
+   * only the digest, never the raw bot token, so its bridge can key journals,
+   * admission, and pairing without holding transport authority.
+   */
+  identityEnv?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -217,11 +231,15 @@ export function planTelegramWorkerLaunch(
     cwd: spec.cwd,
     env: {
       ...spec.env,
+      ...(deps.identityEnv ?? {}),
       // One manual-follower identity per managed worker. Without this every worker the
       // daemon launches inherits the daemon's own parent-derived identity, so the
       // leader treats each new worker as a successor of the others and hands the same
       // Telegram Thread between them.
       PI_TELEGRAM_FOLLOWER_OWNER_ID: `worker:${spec.name}`,
+      // A managed worker never leads: the daemon is the only transport owner, and a
+      // worker promotion after a daemon crash would lock the restarted daemon out.
+      [TELEGRAM_DAEMON_WORKER_ENV]: "1",
     },
   };
 }

@@ -832,17 +832,17 @@ export function createTelegramWorkspaceAdmissionOperationId(): string {
 
 export function createTelegramWorkspaceAdmissionProfileKey(input: {
   profileName?: string;
-  botToken: string;
+  tokenSha256: string;
 }): string {
   const profileName = (input.profileName ?? "default").trim();
-  if (!isBoundedText(profileName) || !isBoundedText(input.botToken)) {
+  if (!isBoundedText(profileName) || !/^[a-f0-9]{64}$/u.test(input.tokenSha256)) {
     invalidInput("Telegram Workspace admission bot/profile identity is invalid.");
   }
   return JSON.stringify({
     version: TELEGRAM_WORKSPACE_ADMISSION_VERSION,
     profile: profileName,
     bot: {
-      tokenSha256: createHash("sha256").update(input.botToken).digest("hex"),
+      tokenSha256: input.tokenSha256,
     },
   });
 }
@@ -853,7 +853,7 @@ export interface TelegramWorkspaceAdmissionRuntimeBinding {
 
 export function createTelegramWorkspaceAdmissionRuntimeBinding(input: {
   getProfileName: () => string | undefined;
-  getBotToken: () => string | undefined;
+  getBotIdentity: () => { tokenSha256: string } | undefined;
   getPath: (profileName?: string) => string;
   owner: TelegramWorkspaceAdmissionOwner;
   getNowMs?: () => number;
@@ -863,12 +863,12 @@ export function createTelegramWorkspaceAdmissionRuntimeBinding(input: {
 }): TelegramWorkspaceAdmissionRuntimeBinding {
   return {
     resolve() {
-      const botToken = input.getBotToken();
-      if (!botToken) return undefined;
+      const botIdentity = input.getBotIdentity();
+      if (!botIdentity) return undefined;
       const configuredProfileName = input.getProfileName();
       const profileKey = createTelegramWorkspaceAdmissionProfileKey({
         profileName: configuredProfileName ?? "default",
-        botToken,
+        tokenSha256: botIdentity.tokenSha256,
       });
       return createTelegramWorkspaceAdmissionLedger({
         path: input.getPath(configuredProfileName),

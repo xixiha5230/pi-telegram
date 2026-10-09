@@ -56,8 +56,30 @@ export interface TelegramWorkerSupervisorPorts {
   readinessAttempts?: number;
   readinessIntervalMs?: number;
   killTimeoutMs?: number;
+  /** Maximum time to let a busy worker drain before aborting it. */
+  drainTimeoutMs?: number;
+  /** Poll interval while waiting for a worker to become idle. */
+  drainPollIntervalMs?: number;
   restartDelayMs?: number;
   maxRestartAttempts?: number;
+  /**
+   * Answer one `extension_ui_request` from a managed worker. The port owns the
+   * Telegram dialog and calls `respond` exactly once with a value, confirmation,
+   * or cancellation. Absent means the request is cancelled immediately.
+   */
+  onExtensionUiRequest?: (
+    workerId: string,
+    request: unknown,
+    respond: (
+      reply: { value: string } | { confirmed: boolean } | { cancelled: true },
+    ) => void,
+  ) => void;
+  /**
+   * Daemon-provisioned bot identity env for managed workers. The worker receives
+   * only the token digest, never the raw token, so its bridge keys journals,
+   * admission, and pairing without holding transport authority.
+   */
+  getWorkerIdentityEnv?: () => Readonly<Record<string, string>> | undefined;
   recordEvent?: (message: string, details?: Record<string, unknown>) => void;
 }
 
@@ -116,6 +138,7 @@ interface ManagedEntry {
   sessionFallbackUsed: boolean;
   killTimer?: ReturnType<typeof setTimeout>;
   restartTimer?: ReturnType<typeof setTimeout>;
+  drainStarted: boolean;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -137,6 +160,8 @@ export function createTelegramWorkerSupervisor(
   const readinessAttempts = ports.readinessAttempts ?? 20;
   const readinessIntervalMs = ports.readinessIntervalMs ?? 1000;
   const killTimeoutMs = ports.killTimeoutMs ?? 8000;
+  const drainTimeoutMs = ports.drainTimeoutMs ?? 8000;
+  const drainPollIntervalMs = ports.drainPollIntervalMs ?? 100;
   const restartDelayMs = ports.restartDelayMs ?? 2000;
   const maxRestartAttempts = ports.maxRestartAttempts ?? 5;
   const managed = new Map<number, ManagedEntry>();
@@ -162,7 +187,7 @@ export function createTelegramWorkerSupervisor(
         await sleep(readinessIntervalMs);
       }
     }
-    if (!managed.has(entry.pid)) return;
+    if (!managed.has(entry.pid) || entry.stopping) return;
     try {
       await entry.rpc.request(
         { type: "prompt", message: registerCommand },
@@ -184,6 +209,46 @@ export function createTelegramWorkerSupervisor(
     }
   };
 
+  const handleWorkerUiRequest = (workerId: string, event: unknown): void => {
+    if (!event || typeof event !== "object" || Array.isArray(event)) return;
+    const record = event as Record<string, unknown>;
+    if (record.type !== "extension_ui_request" || typeof record.id !== "string") return;
+    const respond = (
+      reply: { value: string } | { confirmed: boolean } | { cancelled: true },
+    ): void => {
+      const entry = findManagedBySpec(workerId);
+      if (!entry) return;
+      try {
+        entry.process.write(`${JSON.stringify({
+          type: "extension_ui_response",
+          id: record.id,
+          ...reply,
+        })}\n`);
+      } catch (error) {
+        ports.recordEvent?.("Managed worker UI response failed", {
+          phase: "worker-ui-response",
+          spec: workerId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+    if (!ports.onExtensionUiRequest) {
+      // Fail closed: an unanswered dialog would stall the worker forever.
+      respond({ cancelled: true });
+      return;
+    }
+    try {
+      ports.onExtensionUiRequest(workerId, event, respond);
+    } catch (error) {
+      ports.recordEvent?.("Managed worker UI request failed", {
+        phase: "worker-ui-request",
+        spec: workerId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      respond({ cancelled: true });
+    }
+  };
+
   const startSpec = (
     spec: TelegramWorkerLaunchSpec,
     carried: { restartAttempts?: number; sessionFallbackUsed?: boolean } = {},
@@ -197,6 +262,7 @@ export function createTelegramWorkerSupervisor(
     }
     const plan = planTelegramWorkerLaunch(spec, {
       executable: ports.executable,
+      identityEnv: ports.getWorkerIdentityEnv?.(),
     });
     const entry = {
       specName: spec.name,
@@ -208,12 +274,16 @@ export function createTelegramWorkerSupervisor(
       // Restart attempts accumulate across respawns, so a crash loop is bounded.
       restartAttempts: carried.restartAttempts ?? 0,
       sessionFallbackUsed: carried.sessionFallbackUsed ?? false,
+      drainStarted: false,
       buffer: "",
     } as unknown as ManagedEntry;
     let hostRef: TelegramRpcWorkerHost | undefined;
     const rpc = createTelegramRpcClient({
       write: (line) => entry.process.write(line),
-      onEvent: (event) => hostRef?.ingest(event),
+      onEvent: (event) => {
+        hostRef?.ingest(event);
+        handleWorkerUiRequest(spec.name, event);
+      },
       onError: (error) => {
         ports.recordEvent?.("Managed worker RPC error", {
           phase: "worker-rpc",
@@ -288,20 +358,15 @@ export function createTelegramWorkerSupervisor(
     });
   };
 
-  const stop = (worker: string | number): TelegramWorkerSupervisorResult => {
-    const pid = resolvePid(worker);
-    if (pid === undefined) return { ok: false, message: `Invalid worker: ${worker}` };
-    const entry = managed.get(pid);
-    if (!entry) return { ok: false, message: `Unknown managed worker: ${pid}` };
-    entry.stopping = true;
-    entry.state = "stopping";
+  const terminate = (entry: ManagedEntry): void => {
+    if (!managed.has(entry.pid)) return;
     try {
       entry.process.kill("SIGTERM");
     } catch {
       /* already gone */
     }
     entry.killTimer = setTimeout(() => {
-      if (!managed.has(pid)) return;
+      if (!managed.has(entry.pid)) return;
       try {
         entry.process.kill("SIGKILL");
       } catch {
@@ -309,6 +374,59 @@ export function createTelegramWorkerSupervisor(
       }
     }, killTimeoutMs);
     entry.killTimer.unref?.();
+  };
+
+  const isIdle = (entry: ManagedEntry): boolean => {
+    const state = entry.host.state();
+    return !state.isStreaming && !state.isCompacting &&
+      state.steering.length === 0 && state.followUp.length === 0;
+  };
+
+  const drainAndTerminate = async (entry: ManagedEntry): Promise<void> => {
+    if (entry.drainStarted) return;
+    entry.drainStarted = true;
+    if (isIdle(entry)) {
+      terminate(entry);
+      return;
+    }
+
+    const deadline = now() + drainTimeoutMs;
+    while (managed.has(entry.pid) && entry.stopping && now() < deadline) {
+      await entry.host.refreshState();
+      if (isIdle(entry)) {
+        terminate(entry);
+        return;
+      }
+      await sleep(Math.max(0, drainPollIntervalMs));
+    }
+    if (!managed.has(entry.pid)) return;
+
+    // A busy worker that did not drain is explicitly aborted before transport
+    // escalation. The abort is best effort; an unknown RPC outcome must never
+    // prevent the bounded SIGTERM/SIGKILL shutdown path.
+    ports.recordEvent?.("Managed worker drain timed out; aborting", {
+      phase: "worker-drain-timeout",
+      pid: entry.pid,
+      spec: entry.specName,
+    });
+    try {
+      await entry.host.abort();
+    } catch {
+      /* continue to bounded process termination */
+    }
+    terminate(entry);
+  };
+
+  const stop = (worker: string | number): TelegramWorkerSupervisorResult => {
+    const pid = resolvePid(worker);
+    if (pid === undefined) return { ok: false, message: `Invalid worker: ${worker}` };
+    const entry = managed.get(pid);
+    if (!entry) return { ok: false, message: `Unknown managed worker: ${pid}` };
+    if (!entry.stopping) {
+      entry.stopping = true;
+      entry.state = "stopping";
+      void drainAndTerminate(entry);
+    }
     return { ok: true, message: `Stopping ${entry.specName} (pid ${pid}).` };
   };
 

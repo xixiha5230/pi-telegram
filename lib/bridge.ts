@@ -101,11 +101,10 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     getLeaderSocketPath: getTelegramBusSocketPath,
     getFollowerSocketPath: getTelegramBusFollowerSocketPath,
   } = busProcessRuntime;
-  const getTelegramBotId = Config.createTelegramConfigBotIdGetter(configStore);
   const workspaceAdmissionRuntime =
     WorkspaceAdmission.createTelegramWorkspaceAdmissionRuntimeBinding({
       getProfileName: configStore.getActiveProfileName,
-      getBotToken: configStore.getBotToken,
+      getBotIdentity: configStore.getBotIdentity,
       getPath: Paths.resolveTelegramWorkspaceAdmissionPath,
       owner: {
         processId: telegramProcessId,
@@ -155,15 +154,13 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
   const getTelegramUpdateAdmissionScope =
     Journal.createTelegramUpdateJournalReceiptScopeResolver({
       getProfileName: configStore.getActiveProfileName,
-      getBotToken: configStore.getBotToken,
-      getBotId: getTelegramBotId,
+      getBotIdentity: configStore.getBotIdentity,
     });
   const telegramJournalBindingRuntime =
     Journal.createTelegramUpdateJournalBindingRuntime({
       base: {
         getProfileName: configStore.getActiveProfileName,
-        getBotToken: configStore.getBotToken,
-        getBotId: getTelegramBotId,
+        getBotIdentity: configStore.getBotIdentity,
         onRecovery(event) {
           recordRuntimeEvent(
             "recovery",
@@ -339,7 +336,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
   const telegramTransportStampRuntime =
     Queue.createTelegramTransportStampRuntime({
       getProfileName: configStore.getActiveProfileName,
-      getBotToken: configStore.getBotToken,
+      getBotIdentity: configStore.getBotIdentity,
     });
   const telegramQueueStore = Queue.createTelegramTransportStampedQueueStore(
     rawTelegramQueueStore,
@@ -1310,6 +1307,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
         getContext: telegramSessionContextStore.get,
         getAuthSecret: telegramBusFollowerControlState.getActiveAuthSecret,
         getRecipientBindingKey: getTelegramManualFollowerProfileKey,
+        workerControl: host.workerControl,
         durableAdmission: followerDurableAdmissionRuntime,
         handleQueueHandoff: acceptStagedQueueHandoff,
       },
@@ -2059,6 +2057,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     threadStore,
     deliveryLifecycleRuntime,
     busFollowers: telegramBusFollowerRegistry,
+    workerControl: telegramBusLeaderRuntime.workerControl,
     sessionContextStore: telegramSessionContextStore,
     sendTextReply,
     sendMarkdownReply,

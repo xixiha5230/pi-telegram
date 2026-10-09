@@ -11,7 +11,7 @@ import type { TelegramManagedProcessHandlers } from "../lib/supervisor.ts";
 import { createTelegramWorkerSupervisor } from "../lib/supervisor.ts";
 import type { TelegramWorkerLaunchPlan } from "../lib/worker-spec.ts";
 
-function createFakeSpawn() {
+function createFakeSpawn(responseData: unknown = {}) {
   const procs: Array<{
     plan: TelegramWorkerLaunchPlan;
     handlers: TelegramManagedProcessHandlers;
@@ -36,7 +36,7 @@ function createFakeSpawn() {
               type: "response",
               command: request.type,
               success: true,
-              data: {},
+              data: responseData,
             })}\n`,
           ),
         );
@@ -62,6 +62,31 @@ function supervisorWith(spawn: ReturnType<typeof createFakeSpawn>["spawn"]) {
       path.startsWith("/") && EXISTING.has(path) ? path : undefined,
   });
 }
+
+test("Supervisor provisions the worker bot identity digest without the token", () => {
+  const fake = createFakeSpawn();
+  const supervisor = createTelegramWorkerSupervisor({
+    spawn: fake.spawn,
+    executable: "pi",
+    readinessAttempts: 1,
+    readinessIntervalMs: 0,
+    restartDelayMs: 0,
+    resolveDirectory: (path) =>
+      path.startsWith("/") && EXISTING.has(path) ? path : undefined,
+    getWorkerIdentityEnv: () => ({
+      PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256: "b".repeat(64),
+      PI_TELEGRAM_WORKER_BOT_ID: "5",
+    }),
+  });
+  const started = supervisor.startPath("/work/docs");
+  assert.equal(started.ok, true);
+  assert.equal(
+    fake.procs[0]?.plan.env.PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256,
+    "b".repeat(64),
+  );
+  assert.equal(fake.procs[0]?.plan.env.PI_TELEGRAM_WORKER_BOT_ID, "5");
+  assert.equal(fake.procs[0]?.plan.env.PI_TELEGRAM_DAEMON_WORKER, "1");
+});
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
@@ -179,7 +204,7 @@ test("Supervisor derives a name from the directory and rejects a duplicate", () 
   assert.match(duplicate.message, /already running/u);
 });
 
-test("Supervisor stops a worker with SIGTERM and clears it on exit", () => {
+test("Supervisor stops an idle worker with SIGTERM and clears it on exit", () => {
   const fake = createFakeSpawn();
   const supervisor = supervisorWith(fake.spawn);
   supervisor.startPath("/work/plugins");
@@ -189,6 +214,32 @@ test("Supervisor stops a worker with SIGTERM and clears it on exit", () => {
   assert.equal(supervisor.list()[0]?.state, "stopping");
   fake.procs[0]?.handlers.onExit(0);
   assert.equal(supervisor.list().length, 0);
+});
+
+test("Supervisor drains a busy worker, then aborts before SIGTERM", async () => {
+  const fake = createFakeSpawn({ isStreaming: true });
+  const supervisor = createTelegramWorkerSupervisor({
+    spawn: fake.spawn,
+    executable: "pi",
+    readinessAttempts: 1,
+    readinessIntervalMs: 0,
+    drainTimeoutMs: 0,
+    drainPollIntervalMs: 0,
+    resolveDirectory: (path) => (EXISTING.has(path) ? path : undefined),
+  });
+  supervisor.startPath("/work/plugins");
+  fake.procs[0]?.handlers.onData(`${JSON.stringify({ type: "agent_start" })}\n`);
+  const stopped = supervisor.stop(1001);
+  assert.equal(stopped.ok, true);
+  await tick();
+  const requests = fake.procs[0]?.writes.map(
+    (line) => JSON.parse(line) as { type: string },
+  ) ?? [];
+  assert.deepEqual(requests.map((request) => request.type), [
+    "get_state",
+    "abort",
+  ]);
+  assert.deepEqual(fake.procs[0]?.signals, ["SIGTERM"]);
 });
 
 test("Supervisor restarts a failed worker on failure", async () => {

@@ -670,6 +670,56 @@ test("Telegram config store rejects missing named profile activation", () => {
   assert.equal(store.getBotToken(), undefined);
 });
 
+test("Telegram config store withholds the raw token from a daemon-provisioned worker", async () => {
+  const agentDir = await mkdtemp(join(tmpdir(), "pi-telegram-worker-identity-"));
+  const configPath = join(agentDir, "telegram.json");
+  const token = "worker-token";
+  const tokenSha256 = createHash("sha256").update(token).digest("hex");
+  try {
+    const writer = createTelegramConfigStore({
+      agentDir,
+      configPath,
+      initialConfig: {
+        profiles: { default: { botToken: token, botId: 9, allowedUserId: 7 } },
+      },
+    });
+    await writer.persist();
+    const worker = createTelegramConfigStore({
+      agentDir,
+      configPath,
+      env: {
+        PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256: tokenSha256,
+        PI_TELEGRAM_WORKER_BOT_ID: "9",
+      },
+    });
+    await worker.load();
+    // The worker still resolves the shared profile, but never exposes the raw token.
+    assert.equal(worker.getBotToken(), undefined);
+    assert.equal(worker.getBotTokenDiagnostic(), undefined);
+    assert.equal(worker.hasBotToken(), true);
+    assert.deepEqual(worker.getBotIdentity(), { tokenSha256, botId: 9 });
+    assert.deepEqual(
+      worker.withPairedUserAdmission("default", tokenSha256, 7, () => "ok"),
+      { admitted: true, value: "ok" },
+    );
+    assert.deepEqual(
+      worker.withPairedUserAdmission("default", tokenSha256, 8, () => "ok"),
+      { admitted: false },
+    );
+  } finally {
+    await rm(agentDir, { recursive: true, force: true });
+  }
+});
+
+test("Telegram config store ignores malformed worker identity env", () => {
+  const store = createTelegramConfigStore({
+    initialConfig: { profiles: { default: { botToken: "real-token", botId: 3 } } },
+    env: { PI_TELEGRAM_WORKER_BOT_TOKEN_SHA256: "not-a-digest" },
+  });
+  assert.equal(store.getBotToken(), "real-token");
+  assert.equal(store.getBotIdentity()?.tokenSha256.length, 64);
+});
+
 test("Telegram config load recovers invalid JSON and records a diagnostic", async () => {
   const agentDir = await mkdtemp(join(tmpdir(), "pi-telegram-invalid-config-"));
   const configPath = join(agentDir, "telegram.json");

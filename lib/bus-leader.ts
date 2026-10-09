@@ -23,6 +23,7 @@ import type { TelegramTarget } from "./target.ts";
 import * as Threads from "./threads.ts";
 import {
   createTelegramBusLocalServer,
+  createTelegramBusRequestIdFactory,
   createUnauthorizedBusAck,
   getTelegramBusEnvelopeTrafficClass,
   getTelegramBusProtocolCompatibility,
@@ -74,6 +75,10 @@ export interface TelegramBusLeaderRuntime<TContext> {
   ) => Promise<Threads.TelegramTopicTargetRecord>;
   startPolling: (ctx: TContext) => Promise<void>;
   stopPolling: () => Promise<void>;
+  workerControl: (
+    instanceId: string,
+    command: import("./worker-control-protocol.ts").TelegramWorkerControlCommand,
+  ) => Promise<unknown>;
   routeQueueHandoff: (input: {
     requestId: string;
     auth?: string;
@@ -2834,6 +2839,51 @@ export function createTelegramBusLeaderRuntime<TContext>(
   deps: TelegramBusLeaderRuntimeDeps<TContext>,
 ): TelegramBusLeaderRuntime<TContext> {
   const getNowMs = deps.getNowMs ?? Date.now;
+  const createControlRequestId = createTelegramBusRequestIdFactory(
+    "leader-control",
+  );
+  const workerControl = async (
+    instanceId: string,
+    command: import("./worker-control-protocol.ts").TelegramWorkerControlCommand,
+  ): Promise<unknown> => {
+    const follower = deps.followerRegistry.get(instanceId);
+    if (!follower?.registrationGeneration) {
+      throw new Error("Attached Pi worker is not registered.");
+    }
+    const expectedGeneration = follower.registrationGeneration;
+    const socketPath =
+      follower.busSocketPath ?? getTelegramBusFollowerSocketPath(instanceId);
+    const response = await sendTelegramBusLocalEnvelope({
+      socketPath,
+      timeoutMs: deps.timeoutMs,
+      retry: getTelegramBusTransportRetryPolicy({
+        endpoint: socketPath,
+        operation: "operation",
+      }),
+      envelope: {
+        kind: "leader.workerControl",
+        requestId: createControlRequestId(),
+        auth: deps.authSecret,
+        recipientInstanceId: instanceId,
+        recipientRegistrationGeneration: expectedGeneration,
+        command,
+        sentAtMs: getNowMs(),
+      },
+    });
+    if (
+      deps.followerRegistry.get(instanceId)?.registrationGeneration !==
+      expectedGeneration
+    ) {
+      throw new Error("Worker control completed for a stale registration.");
+    }
+    if (response?.kind !== "bus.ack" || !response.ok) {
+      throw new Error(response?.kind === "bus.ack"
+        ? response.message ?? "Pi worker rejected the control request."
+        : "Pi worker control request was not acknowledged.");
+    }
+    deps.followerRegistry.heartbeat(instanceId, getNowMs());
+    return response.result;
+  };
   const followerPruneIntervalMs = deps.followerPruneIntervalMs ?? 1000;
   const followerStaleAfterMs =
     deps.followerStaleAfterMs ?? TELEGRAM_BUS_FOLLOWER_STALE_AFTER_MS;
@@ -3091,6 +3141,7 @@ export function createTelegramBusLeaderRuntime<TContext>(
     handleEnvelope,
   });
   return {
+    workerControl,
     routeQueueHandoff: (envelope) =>
       routeQueueHandoffEnvelope(envelope),
     startPolling: async (ctx) => {

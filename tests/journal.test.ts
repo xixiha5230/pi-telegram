@@ -4001,8 +4001,10 @@ test("Update journal runtime binding separates worker and process recovery ident
   let botId: number | undefined;
   const resolveBinding = createTelegramUpdateJournalRuntimeBindingResolver({
     getProfileName: () => profileName,
-    getBotToken: () => botToken,
-    getBotId: () => botId,
+    getBotIdentity: () =>
+      botToken
+        ? createTelegramUpdateJournalBotIdentity({ botToken, botId })
+        : undefined,
     getJournalPath: (profile) =>
       join(directory, profile ? `inbox.${profile}.json` : "inbox.json"),
     getQueueRuntimeIdentity: () => ({
@@ -4081,8 +4083,8 @@ test("Update journal binding runtime selects leader, follower, and recipient aut
     const runtime = createTelegramUpdateJournalBindingRuntime({
       base: {
         getProfileName: () => "work",
-        getBotToken: () => "token-a",
-        getBotId: () => 7,
+        getBotIdentity: () =>
+          createTelegramUpdateJournalBotIdentity({ botToken: "token-a", botId: 7 }),
         withWriterAdmission(operation) {
           writerAdmissions += 1;
           return operation();
@@ -4210,8 +4212,8 @@ test("Update journal receipt scope resolver freezes same-transport bot enrichmen
   let botToken = "token-a";
   const resolve = createTelegramUpdateJournalReceiptScopeResolver({
     getProfileName: () => "work",
-    getBotToken: () => botToken,
-    getBotId: () => botId,
+    getBotIdentity: () =>
+      createTelegramUpdateJournalBotIdentity({ botToken, botId }),
   });
   const initial = resolve();
   botId = 42;

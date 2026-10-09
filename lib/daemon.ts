@@ -10,7 +10,8 @@
 
 import { randomUUID } from "node:crypto";
 import { readdirSync, realpathSync, statSync } from "node:fs";
-import type * as Pi from "./pi.ts";
+import * as Pi from "./pi.ts";
+import * as Config from "./config.ts";
 import * as Paths from "./paths.ts";
 import { createTelegramBridge } from "./bridge.ts";
 import { createDaemonBridgeHost } from "./daemon-host.ts";
@@ -39,6 +40,10 @@ import {
 import { registerTelegramWorkerCommands } from "./worker-commands.ts";
 import { formatTelegramUnattendedCleanupNotice } from "./thread-cleanup-manager.ts";
 import { createTelegramWorkerDirectoryBrowser } from "./worker-browser.ts";
+import {
+  createTelegramManagedWorkerUiBridge,
+  type TelegramManagedWorkerUiBridge,
+} from "./worker-ui.ts";
 
 export interface TelegramDaemonOptions {
   /** Workspace hint recorded for the daemon's own leader thread and lock. */
@@ -93,6 +98,7 @@ export interface TelegramDaemon {
   readonly workers: TelegramWorkerRegistry;
   readonly routes: TelegramRouteRegistry;
   readonly control: TelegramWorkerControl;
+  readonly workerControl: ReturnType<typeof createTelegramBridge>["ports"]["workerControl"];
   readonly ports: ReturnType<typeof createTelegramBridge>["ports"];
   readonly context: DaemonContext;
   start: () => Promise<void>;
@@ -187,7 +193,11 @@ export function createTelegramDaemon(
         const target = follower.target;
         if (worker && target && Number.isSafeInteger(target.threadId)) {
           const current = routes.resolve(target);
-          if (!current || current.workerId !== workerId) {
+          if (
+            !current ||
+            current.workerId !== workerId ||
+            current.registrationGeneration !== worker.registrationGeneration
+          ) {
             routes.set({
               target,
               workerId,
@@ -217,6 +227,20 @@ export function createTelegramDaemon(
     : createTelegramWorkerSupervisor({
         spawn: createNodeWorkerSpawnPort(),
         executable: process.env.PI_TELEGRAM_WORKER_EXECUTABLE ?? "pi",
+        // The daemon owns the raw token. Managed workers receive only the digest,
+        // so a worker never holds transport authority even though it runs the
+        // same bridge extension a terminal Pi does.
+        getWorkerIdentityEnv: () => {
+          const identity = core.ports.configStore.getBotIdentity();
+          return identity
+            ? {
+                [Config.TELEGRAM_WORKER_BOT_TOKEN_SHA256_ENV]: identity.tokenSha256,
+                ...(identity.botId !== undefined
+                  ? { [Config.TELEGRAM_WORKER_BOT_ID_ENV]: String(identity.botId) }
+                  : {}),
+              }
+            : undefined;
+        },
         resolveDirectory: (path) => {
           try {
             const resolved = realpathSync(path);
@@ -225,9 +249,39 @@ export function createTelegramDaemon(
             return undefined;
           }
         },
+        onExtensionUiRequest: (workerId, request, respond) =>
+          workerUi?.handleRequest(workerId, request, respond) ??
+          respond({ cancelled: true }),
         recordEvent: (message, details) =>
           core.ports.recordRuntimeEvent?.("daemon", message, details),
       });
+  // The managed worker registers with the bus under its follower instance id, but the
+  // supervisor knows it by its directory-derived spec name. Resolve one to the other
+  // through the live follower pid so dialogs target the worker's real Thread.
+  const resolveWorkerUiRoute = (specName: string) => {
+    const entry = supervisor?.list().find((worker) => worker.spec === specName);
+    if (!entry) return undefined;
+    const follower = core.ports.busFollowers
+      .list()
+      .find((candidate) => candidate.pid === entry.pid);
+    if (!follower) return undefined;
+    const route = routes
+      .list()
+      .find((candidate) => candidate.workerId === follower.instanceId);
+    return route
+      ? {
+          target: route.target,
+          registrationGeneration: route.registrationGeneration,
+        }
+      : undefined;
+  };
+  let workerUi: TelegramManagedWorkerUiBridge | undefined = createTelegramManagedWorkerUiBridge({
+    api: core.ports.telegramApiRuntime,
+    resolveRoute: resolveWorkerUiRoute,
+    getAllowedUserId: core.ports.configStore.getAllowedUserId,
+    recordEvent: (error, details) =>
+      core.ports.recordRuntimeEvent?.("daemon", error, details),
+  });
   const workerBrowser = createTelegramWorkerDirectoryBrowser({
     root: process.env.HOME ?? "/",
     listDirectories: (path) =>
@@ -374,6 +428,12 @@ export function createTelegramDaemon(
       return { ok: false, alert: "Could not reach that worker's thread." };
     }
   };
+  const cancelWorkerUiForWorkerId = (workerId: string): void => {
+    const follower = core.ports.busFollowers.get(workerId);
+    if (follower?.pid === undefined) return;
+    const entry = supervisor?.list().find((worker) => worker.pid === follower.pid);
+    if (entry) workerUi?.cancelWorker(entry.spec);
+  };
   const control = createTelegramWorkerControl({
     workers,
     routes,
@@ -386,18 +446,26 @@ export function createTelegramDaemon(
         ? {
             control: {
               start: async (target) => supervisor.startPath(target),
-              stop: async (worker) => supervisor.stop(worker),
-              restart: async (worker) => supervisor.restart(worker),
+              stop: async (worker) => {
+                cancelWorkerUiForWorkerId(worker);
+                return supervisor.stop(worker);
+              },
+              restart: async (worker) => {
+                cancelWorkerUiForWorkerId(worker);
+                return supervisor.restart(worker);
+              },
             } satisfies TelegramWorkerControlPort,
           }
         : {}),
   });
   let disposeCommands: (() => void) | undefined;
+  let disposeWorkerUi: (() => void) | undefined;
   return {
     epoch,
     workers,
     routes,
     control,
+    workerControl: core.ports.workerControl,
     ports: core.ports,
     context,
     async start() {
@@ -453,6 +521,7 @@ export function createTelegramDaemon(
         isDaemonOwnedTarget: (target) =>
           core.ports.busFollowers.getByTarget(target) === undefined,
       });
+      disposeWorkerUi = workerUi?.start();
       // Relaunch the managed workers this daemon was supervising before it restarted.
       // The snapshot lists only workers that were live, so a worker the operator
       // stopped stays stopped, and a directory that disappeared is reported instead of
@@ -496,6 +565,9 @@ export function createTelegramDaemon(
       }
       disposeCommands?.();
       disposeCommands = undefined;
+      disposeWorkerUi?.();
+      disposeWorkerUi = undefined;
+      workerUi?.dispose();
       supervisor?.dispose();
       await core.ports.lockedPollingRuntime.stop();
     },

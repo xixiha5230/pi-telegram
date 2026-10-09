@@ -75,6 +75,9 @@ export function createDaemonBridgeHost(
     // contract shape.
     api: {} as Pi.ExtensionAPI,
     ports: createDaemonApiPorts(),
+    workerControl: async () => {
+      throw new Error("The daemon host does not own a Pi worker context.");
+    },
     helpers: createDaemonHelpers(),
     // The daemon is the only leader under `cluster.leader: "daemon"`.
     canLead: () => true,

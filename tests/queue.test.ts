@@ -157,7 +157,7 @@ test("Transport stamp runtime owns profile and token generations", () => {
   let botToken: string | undefined = "token-a";
   const runtime = createTelegramTransportStampRuntime({
     getProfileName: () => profile,
-    getBotToken: () => botToken,
+    getBotIdentity: () => (botToken ? { tokenSha256: botToken } : undefined),
   });
 
   const initial = runtime.getStamp();
@@ -180,7 +180,7 @@ test("Transport stamp runtime owns profile and token generations", () => {
 test("Transport-stamped queue store preserves admitted generations", () => {
   const runtime = createTelegramTransportStampRuntime({
     getProfileName: () => "work",
-    getBotToken: () => "token",
+    getBotIdentity: () => ({ tokenSha256: "token" }),
   });
   const rawStore = createTelegramQueueStore<string>();
   const store = createTelegramTransportStampedQueueStore(

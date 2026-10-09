@@ -73,6 +73,26 @@ import {
   getTelegramThreadOwnerKey,
 } from "../lib/threads.ts";
 
+test("Worker control bus envelopes parse only bounded allowlisted commands", () => {
+  const valid = parseTelegramBusEnvelope(JSON.stringify({
+    kind: "leader.workerControl",
+    requestId: "leader-control:1",
+    recipientInstanceId: "worker-a",
+    recipientRegistrationGeneration: "generation-a",
+    command: { type: "prompt", message: "hello" },
+    sentAtMs: 1,
+  }));
+  assert.equal(valid?.kind, "leader.workerControl");
+  assert.equal(parseTelegramBusEnvelope(JSON.stringify({
+    kind: "leader.workerControl",
+    requestId: "leader-control:2",
+    recipientInstanceId: "worker-a",
+    recipientRegistrationGeneration: "generation-a",
+    command: { type: "bash", command: "arbitrary" },
+    sentAtMs: 1,
+  })), undefined);
+});
+
 test("Bus envelope auth compares the exact secret in constant time", () => {
   const secret = "leader-minted-secret";
   assert.equal(

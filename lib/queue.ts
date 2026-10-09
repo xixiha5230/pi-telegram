@@ -384,17 +384,17 @@ export function createTelegramQueueStore<TContext = unknown>(
 
 export function createTelegramTransportStampRuntime(deps: {
   getProfileName(): string | undefined;
-  getBotToken(): string | undefined;
+  getBotIdentity(): { tokenSha256: string } | undefined;
 }): TelegramTransportStampRuntime {
   let profile: string | undefined;
-  let botToken: string | undefined;
+  let botIdentity: string | undefined;
   let generation = 0;
   const getStamp = function (): TelegramTransportStamp {
     const nextProfile = deps.getProfileName() ?? "default";
-    const nextBotToken = deps.getBotToken();
-    if (nextProfile !== profile || nextBotToken !== botToken) {
+    const nextBotIdentity = deps.getBotIdentity()?.tokenSha256;
+    if (nextProfile !== profile || nextBotIdentity !== botIdentity) {
       profile = nextProfile;
-      botToken = nextBotToken;
+      botIdentity = nextBotIdentity;
       generation += 1;
     }
     return { profile: nextProfile, generation: String(generation) };

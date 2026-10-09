@@ -2396,23 +2396,18 @@ export function getTelegramUpdateJournalBindingPath(
 
 export function createTelegramUpdateJournalReceiptScopeResolver(deps: {
   getProfileName: () => string | undefined;
-  getBotToken: () => string | undefined;
-  getBotId: () => number | undefined;
+  getBotIdentity: () => TelegramUpdateJournalBotIdentity | undefined;
 }): () => string | undefined {
   let identityKey: string | undefined;
   let receiptScope: string | undefined;
   return () => {
-    const botToken = deps.getBotToken();
-    if (!botToken) {
+    const botIdentity = deps.getBotIdentity();
+    if (!botIdentity) {
       identityKey = undefined;
       receiptScope = undefined;
       return undefined;
     }
     const profileName = deps.getProfileName() ?? TELEGRAM_DEFAULT_PROFILE_NAME;
-    const botIdentity = createTelegramUpdateJournalBotIdentity({
-      botToken,
-      botId: deps.getBotId(),
-    });
     const nextIdentityKey = `${profileName}\u0000${botIdentity.tokenSha256}`;
     if (nextIdentityKey === identityKey && receiptScope) return receiptScope;
     identityKey = nextIdentityKey;
@@ -2432,8 +2427,7 @@ export interface TelegramUpdateJournalRuntimeBinding {
 
 export interface TelegramUpdateJournalRuntimeBindingResolverDeps {
   getProfileName: () => string | undefined;
-  getBotToken: () => string | undefined;
-  getBotId: () => number | undefined;
+  getBotIdentity: () => TelegramUpdateJournalBotIdentity | undefined;
   getJournalPath: (profileName?: string) => string;
   getQueueRuntimeIdentity?: () => TelegramUpdateJournalQueueRuntimeIdentity;
   withWriterAdmission?: <T>(operation: () => T) => T;
@@ -2448,15 +2442,11 @@ export function createTelegramUpdateJournalRuntimeBindingResolver(
   deps: TelegramUpdateJournalRuntimeBindingResolverDeps,
 ): () => TelegramUpdateJournalRuntimeBinding | undefined {
   return () => {
-    const botToken = deps.getBotToken();
-    if (!botToken) return undefined;
+    const botIdentity = deps.getBotIdentity();
+    if (!botIdentity) return undefined;
     const configuredProfileName = deps.getProfileName();
     const profileName =
       configuredProfileName ?? TELEGRAM_DEFAULT_PROFILE_NAME;
-    const botIdentity = createTelegramUpdateJournalBotIdentity({
-      botToken,
-      botId: deps.getBotId(),
-    });
     const path = deps.getJournalPath(configuredProfileName);
     const workspaceAdmission = deps.getWorkspaceAdmission?.();
     return {
@@ -2579,8 +2569,7 @@ export function createTelegramUpdateJournalBindingRuntime(deps: {
   ) =>
     createTelegramUpdateJournalRuntimeBindingResolver({
       getProfileName: deps.base.getProfileName,
-      getBotToken: deps.base.getBotToken,
-      getBotId: deps.base.getBotId,
+      getBotIdentity: deps.base.getBotIdentity,
       ...(includeQueueRuntimeIdentity && deps.base.getQueueRuntimeIdentity
         ? { getQueueRuntimeIdentity: deps.base.getQueueRuntimeIdentity }
         : {}),
@@ -2608,8 +2597,7 @@ export function createTelegramUpdateJournalBindingRuntime(deps: {
     createPathResolver: (path) =>
       createTelegramUpdateJournalRuntimeBindingResolver({
         getProfileName: deps.base.getProfileName,
-        getBotToken: deps.base.getBotToken,
-        getBotId: deps.base.getBotId,
+        getBotIdentity: deps.base.getBotIdentity,
         ...(deps.base.withWriterAdmission
           ? { withWriterAdmission: deps.base.withWriterAdmission } : {}),
         ...(deps.base.getWorkspaceAdmission
