@@ -18,6 +18,7 @@ import {
   resolveTelegramBusSocketPath,
   sendTelegramBusLocalEnvelope,
   TELEGRAM_BUS_CAPABILITY_DURABLE_FOLLOWER_ADMISSION,
+  TELEGRAM_BUS_CAPABILITY_FOLLOWER_ACTIVITY,
   TELEGRAM_BUS_CAPABILITY_QUEUE_HANDOFF,
   TELEGRAM_BUS_CAPABILITY_WORKSPACE_FOLLOWER_AUTO_CONNECT,
   TELEGRAM_BUS_CAPABILITY_WORKSPACE_THREAD_RENAME,
@@ -4366,6 +4367,62 @@ test("Leader assembly applies display titles and publishes them through heartbea
     await assert.rejects(runtime.setThreadDisplayMode!("letters"), /all connected followers/);
     assert.equal(displayMode, "names");
     await runtime.setThreadDisplayMode?.("names");
+  } finally {
+    await runtime.stopPolling();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("Leader reconciles state titles when a follower reports an activity change", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pi-telegram-activity-display-"));
+  const socketPath = join(dir, "bus.sock");
+  const store = createTelegramTopicTargetStore({ path: join(dir, "state.json") });
+  store.upsertWorkspaceBinding({
+    ...createTelegramWorkspaceBindingIdentity("/worker")!,
+    slot: "B", threadName: "Beacon", target: { chatId: 7, threadId: 42 }, updatedAtMs: 1,
+  });
+  const registry = createTelegramBusFollowerRegistry();
+  registry.register({
+    instanceId: "worker", target: { chatId: 7, threadId: 42 },
+    registrationGeneration: "worker:1", connectedAtMs: Date.now(),
+    protocol: createTelegramBusProtocolIdentity({
+      runtimeBuild: "test",
+      capabilities: [
+        ...TEST_BUS_PROTOCOL_IDENTITY.capabilities,
+        TELEGRAM_BUS_CAPABILITY_THREAD_DISPLAY_MODE,
+        TELEGRAM_BUS_CAPABILITY_FOLLOWER_ACTIVITY,
+      ],
+    }),
+    threadName: "Beacon", slot: "B",
+  });
+  const titles: unknown[] = [];
+  const runtime = createTelegramBusLeaderRuntimeAssembly({
+    runtime: { socketPath, followerRegistry: registry, protocolIdentity: TEST_BUS_PROTOCOL_IDENTITY,
+      startPolling() {}, stopPolling() {} },
+    getAllowedUserId: () => undefined,
+    instanceId: "leader",
+    getCurrentLeaderEpoch: () => 1,
+    getThreadDisplayMode: () => "state",
+    topicTargetStore: store,
+    async callApi<TResponse>(method: string, body: Record<string, unknown>) {
+      if (method === "editForumTopic") titles.push(body.name);
+      return true as TResponse;
+    },
+    callMultipart: async () => true,
+    downloadFile: async () => undefined,
+    getSyncState: () => ({}), setSyncState() {}, setLeaderTarget() {}, recordRuntimeEvent() {},
+  });
+  try {
+    await store.persist();
+    await runtime.startPolling("ctx");
+    await runtime.reconcileThreadDisplay?.();
+    titles.length = 0;
+    await sendTelegramBusLocalEnvelope({ socketPath, envelope: {
+      kind: "follower.heartbeat", requestId: "worker:2", instanceId: "worker",
+      registrationGeneration: "worker:1", activity: { streaming: true }, sentAtMs: Date.now(),
+    } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(titles.includes("⏳ worker"), JSON.stringify(titles));
   } finally {
     await runtime.stopPolling();
     rmSync(dir, { recursive: true, force: true });

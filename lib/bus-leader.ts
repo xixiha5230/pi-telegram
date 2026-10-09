@@ -614,6 +614,7 @@ export function createTelegramBusLeaderRuntimeAssembly<TContext>(
     applyThreadDisplayMode,
     getThreadDisplayMode: deps.getThreadDisplayMode,
     onFollowerRegistered: scheduleDisplay,
+    onFollowerActivityChanged: scheduleDisplay,
     provisionLeaderTarget: (ctx) => {
       const chatId = deps.getAllowedUserId();
       return runWorkspaceOperation(
@@ -844,6 +845,8 @@ export interface TelegramBusLeaderRuntimeDeps<TContext> {
   ) => Promise<{ threadName: string }> | { threadName: string };
   getFollowerDisplayTitle?: (follower: TelegramBusFollowerView) => string | undefined;
   onFollowerRegistered?: () => void;
+  /** Fired when a follower reports a changed live-activity projection. */
+  onFollowerActivityChanged?: () => void;
   applyThreadDisplayMode?: (mode: TelegramThreadDisplayMode, isCurrent: () => boolean) => Promise<void>;
   getThreadDisplayMode?: () => TelegramThreadDisplayMode;
   getCurrentLeaderEpoch?: () => number | string | undefined;
@@ -1804,6 +1807,8 @@ export function createTelegramBusLeaderEnvelopeHandler(deps: {
   protocolIdentity: TelegramBusProtocolIdentity;
   getNowMs?: () => number;
   timeoutMs?: number;
+  /** Fired when a follower reports a changed live-activity projection. */
+  onFollowerActivityChanged?: () => void;
   callApi?: (method: string, args: unknown[]) => Promise<unknown> | unknown;
   authorizeFollowerApiCall?: (input: {
     follower: TelegramBusFollowerView;
@@ -2551,6 +2556,16 @@ export function createTelegramBusLeaderEnvelopeHandler(deps: {
           getNowMs(),
           reportsActivity ? envelope.activity : undefined,
         );
+        // A reported activity change is what makes a `state` Thread title move, so
+        // reconcile it here instead of waiting for an unrelated roster event. This is
+        // the only path that carries a live worker's streaming/queue projection.
+        const activityChanged =
+          (current.activity?.streaming ?? false) !==
+            (follower?.activity?.streaming ?? false) ||
+          (current.activity?.compacting ?? false) !==
+            (follower?.activity?.compacting ?? false) ||
+          (current.activity?.pending ?? 0) !== (follower?.activity?.pending ?? 0);
+        if (activityChanged) deps.onFollowerActivityChanged?.();
         const displayTitle = follower ? deps.getFollowerDisplayTitle?.(follower) : undefined;
         return follower
           ? {
@@ -3044,6 +3059,7 @@ export function createTelegramBusLeaderRuntime<TContext>(
     resetFollowerThreadName: deps.resetFollowerThreadName,
     getFollowerDisplayTitle: deps.getFollowerDisplayTitle,
     onFollowerRegistered: deps.onFollowerRegistered,
+    onFollowerActivityChanged: deps.onFollowerActivityChanged,
     applyThreadDisplayMode: deps.applyThreadDisplayMode,
     getThreadDisplayMode: deps.getThreadDisplayMode,
     getCurrentLeaderEpoch: deps.getCurrentLeaderEpoch,
