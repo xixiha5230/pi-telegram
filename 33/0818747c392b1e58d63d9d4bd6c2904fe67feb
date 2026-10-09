@@ -1,0 +1,43 @@
+docs/control-plane.md
+  s_26bd2f22699832::t_9e18b9457c78e7 10,413
+lib/config.ts
+  s_26bd2f22699832::t_96b257970d6492 22,174-220
+  s_26bd2f22699832::t_b81d713e7929fd 882-904,916,967,971,974-976
+lib/paths.ts
+  s_26bd2f22699832::t_98984860e24104 157-172
+tests/config.test.ts
+  s_26bd2f22699832::t_d76729d1e628ae 22,724-766
+  s_26bd2f22699832::t_dbc8fe0e9026b2 28
+BACKLOG.md
+  s_26bd2f22699832::t_fddca8973b02c2 9
+CHANGELOG.md
+  s_26bd2f22699832::t_b7cea20f29cf6a 9
+lib/daemon.ts
+  s_26bd2f22699832::t_9e481079b158da 12-13,642-658,754-765
+docs/multi-instance-bus.md
+  s_26bd2f22699832::t_076bc70203441a 61
+lib/pi-host.ts
+  s_26bd2f22699832::t_cab7b4f3427f9c 9,80-81,86
+docs/architecture.md
+  s_26bd2f22699832::t_8eafb0dc2d3d9c 44,342-344
+tests/pi-host.test.ts
+  s_26bd2f22699832::t_500deadab7343c 66,70-71
+README.md
+  s_26bd2f22699832::t_8d36269768e5d9 301-302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "330818747c392b1e58d63d9d4bd6c2904fe67feb",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
