@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+## 0.51.0: External Telegram control plane
+
 - `Daemon control panel`: A daemon-owned thread exposes `/daemon`, opening a button panel that never closes itself: Workers lists one `📍 <project>` row per worker with `🛑 Stop` (behind a confirmation) and `♻️ Restart`, then the New worker picker, Status, and an explicit ✖️ Close. `/workers`, `/attach <worker>`, and `/detach` work in both topologies, so a Pi-owned bridge reaches its leader-gated roster; attach re-homes the worker's Thread so inbound delivery follows it.
 - `Managed worker RPC host`: The daemon holds each managed worker's `pi --mode rpc` channel for state projection and control dispatch, and answers `select`/`confirm`/`input`/`editor` extension dialogs as bounded one-shot Telegram prompts. Attached followers accept the same allowlisted control envelope; busy-worker stop drains, aborts, then escalates. Every managed worker is permanently non-leading and keys identity from a daemon-provisioned bot digest, never exposing the raw token.
 - `Managed workers without a terminal`: The `/daemon` picker spawns a worker, presses `/telegram-connect`, and lets it register as an ordinary follower. A restart relaunches snapshot workers by directory — including one that never wrote a session — and the directory-derived identity plus stable profile key reuse the same Thread. Every launch is recorded in a bounded, redacted audit, and a tokenless attached worker reads the daemon-published identity instead of the shared token.
