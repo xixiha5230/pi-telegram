@@ -1,0 +1,54 @@
+lib/daemon.ts
+  s_26bd2f22699832::t_f4f1425b533b5e 479-579,600-601
+  s_26bd2f22699832::t_e114d8ec0447d4 121-128,131-138,154-180
+lib/worker-commands.ts
+  s_26bd2f22699832::t_3620ee0d47e5ca 15,56-57,269,276-281,286-289
+tests/daemon-store.test.ts
+  s_26bd2f22699832::t_93d1e31bb44c90 34
+tests/bus-follower.test.ts
+  s_26bd2f22699832::t_45eac51cff2a53 1952
+  s_26bd2f22699832::t_2c858d49a85758 1915,1933,1944
+  s_26bd2f22699832::t_bec8e6f4deedc9 1910-1914,1916-1932,1934-1943,1945-1951,1953-1980
+lib/bus-follower.ts
+  s_26bd2f22699832::t_b797e228ae1d97 680
+  s_26bd2f22699832::t_909cb6d467e601 576,679,681-683,726-728,744,763,772
+lib/bridge.ts
+  s_26bd2f22699832::t_950eaba245bd4f 2062-2064
+  s_26bd2f22699832::t_1559585842dd1f 2061,2065-2066
+lib/daemon-store.ts
+  s_26bd2f22699832::t_eab43d48a28def 24-25,35-39,44,72-76,83
+tests/worker-control.test.ts
+  s_26bd2f22699832::t_d7d18380627ef4 77-96,110-121
+lib/bus.ts
+  s_26bd2f22699832::t_ed9f32ce13d6a9 956,1720,2616-2617
+  s_26bd2f22699832::t_045aa480ccccfb 1760,1762,1773
+tests/bus.test.ts
+  s_26bd2f22699832::t_df535ea6cc3603 742-764
+CHANGELOG.md
+  s_26bd2f22699832::t_af175cee1c84f7 7
+tests/worker-commands.test.ts
+  s_26bd2f22699832::t_dd0bf335e9750f 124-133
+  s_26bd2f22699832::t_d6b21588d27e63 123,134-139
+docs/control-plane.md
+  s_26bd2f22699832::t_3c43430ffaa537 326-332,348-351
+lib/worker-control.ts
+  s_26bd2f22699832::t_c42d6368b4c522 44-55,471-477,479,482-485,493-497,499
+BACKLOG.md
+  s_26bd2f22699832::t_31b1ef1cffef03 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "0e7c97868c7bb59be42c9ec337a698be2daeb398",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
