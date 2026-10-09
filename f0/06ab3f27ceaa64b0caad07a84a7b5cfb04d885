@@ -1,0 +1,38 @@
+tests/daemon.test.ts
+  s_26bd2f22699832::t_4dfc75fe3c2d40 135-148
+  s_26bd2f22699832::t_cba79a2621473e 1-21,25-28,30-57,61-63,67-100,102-134,149-162
+  s_26bd2f22699832::t_ea77ee067b7a1e 22-24,29,58-60,64-66,101
+CHANGELOG.md
+  s_26bd2f22699832::t_2e694028a023b8 7
+README.md
+  s_26bd2f22699832::t_31a4f9eca9964e 299
+docs/README.md
+  s_26bd2f22699832::t_2922d13a4a28a8 29
+docs/architecture.md
+  s_26bd2f22699832::t_b80dfeacae8523 48
+lib/worker-commands.ts
+  s_26bd2f22699832::t_1ac83b1b40ee29 56-57,277-283
+tests/worker-commands.test.ts
+  s_26bd2f22699832::t_afc27d2a5783d1 159-179
+  s_26bd2f22699832::t_353e9dafcd4e86 14,84-118
+lib/daemon.ts
+  s_26bd2f22699832::t_da118573d55b60 516-525
+AGENTS.md
+  s_26bd2f22699832::t_d21e30c444bf57 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "f006ab3f27ceaa64b0caad07a84a7b5cfb04d885",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
