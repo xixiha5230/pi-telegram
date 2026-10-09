@@ -107,8 +107,6 @@ test("Daemon menu no longer handles any other command", async () => {
     for (const text of [
       "/workers",
       "/workers start /tmp/x",
-      "/attach w1",
-      "/detach",
       "/status",
       "/start",
       "/help",
@@ -117,6 +115,28 @@ test("Daemon menu no longer handles any other command", async () => {
       assert.equal(await registry.dispatch(threadMessage(text)), "pass", text);
     }
     assert.equal(calls.length, 0);
+  } finally {
+    dispose();
+  }
+});
+
+test("Daemon thread consumes /attach and /detach and reports unavailability", async () => {
+  const { workers, calls, dispose, registry } = setup();
+  workers.register({
+    workerId: "w1",
+    kind: "attached",
+    pid: 1,
+    processBirthId: "w1:born",
+    runtimeGeneration: 1,
+    cwd: "/repo",
+    sessionId: "s1",
+  });
+  try {
+    assert.equal(await registry.dispatch(threadMessage("/attach w1")), "consume");
+    assert.equal(await registry.dispatch(threadMessage("/detach")), "consume");
+    assert.equal(calls.length, 2);
+    assert.match(String(calls[0]?.params.text), /unavailable/u);
+    assert.match(String(calls[1]?.params.text), /had no Pi worker/u);
   } finally {
     dispose();
   }

@@ -74,7 +74,26 @@ test("Worker control renders an empty and a populated roster", () => {
 });
 
 test("Worker control attaches and detaches the current thread", async () => {
-  const { workers, routes, surface } = setup();
+  const workers = createTelegramWorkerRegistry();
+  const routes = createTelegramRouteRegistry();
+  routes.adoptEpoch(epoch);
+  const calls: string[] = [];
+  const control: TelegramWorkerControlPort = {
+    start: async () => ({ ok: true, message: "started" }),
+    stop: async () => ({ ok: true, message: "stopped" }),
+    restart: async () => ({ ok: true, message: "restarted" }),
+    attach: async ({ workerId, target }) => {
+      calls.push(`attach:${workerId}:${target.chatId}:${target.threadId}`);
+      routes.set({ target, workerId, registrationGeneration: "g1", epoch });
+      return { ok: true, message: "moved" };
+    },
+    detach: async ({ target }) => {
+      calls.push(`detach:${target.chatId}:${target.threadId}`);
+      routes.clear({ target, epoch });
+      return { ok: true, message: "moved" };
+    },
+  };
+  const surface = createTelegramWorkerControl({ workers, routes, control });
   const worker = registerWorker(workers);
   const target = { chatId: 1, threadId: 2 };
 
@@ -87,6 +106,19 @@ test("Worker control attaches and detaches the current thread", async () => {
 
   const detached = await surface.execute({ kind: "detach" }, { target, epoch });
   assert.equal(detached.ok, true);
+  assert.equal(routes.resolve(target), undefined);
+  assert.deepEqual(calls, ["attach:1234:born:1:2", "detach:1:2"]);
+});
+
+test("Worker control refuses to attach without a re-homing port", async () => {
+  const { workers, surface, routes } = setup();
+  const worker = registerWorker(workers);
+  const target = { chatId: 1, threadId: 2 };
+  const result = await surface.execute(
+    { kind: "attach", workerId: worker.workerId },
+    { target, epoch },
+  );
+  assert.equal(result.ok, false);
   assert.equal(routes.resolve(target), undefined);
 });
 

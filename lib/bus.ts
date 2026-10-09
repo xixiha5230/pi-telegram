@@ -953,7 +953,7 @@ export type TelegramBusEnvelope = (
       recipientRegistrationGeneration?: string;
       target: TelegramTarget & { threadId: number };
       oldTarget?: TelegramTarget & { threadId: number };
-      reason: "thread-restore";
+      reason: "thread-restore" | "operator-attach";
       sentAtMs: number;
     }
   | {
@@ -1717,7 +1717,7 @@ export function createTelegramBusFollowerTargetController(
     follower: TelegramBusFollowerView;
     target: TelegramTarget & { threadId: number };
     oldTarget?: TelegramTarget & { threadId: number };
-    reason: "thread-restore";
+    reason: "thread-restore" | "operator-attach";
   }) => Promise<boolean>;
 } {
   const getNowMs = deps.getNowMs ?? Date.now;
@@ -1757,8 +1757,9 @@ export function createTelegramBusFollowerThreadRestoreHandler(
   record: { instanceId?: string };
   target: TelegramTarget & { threadId: number };
   oldTarget?: TelegramTarget & { threadId: number };
+  reason?: "thread-restore" | "operator-attach";
 }) => Promise<boolean> {
-  return async ({ record, target, oldTarget }) => {
+  return async ({ record, target, oldTarget, reason }) => {
     if (!record.instanceId) return false;
     const follower = deps.followerRegistry.get(record.instanceId);
     if (!follower?.registrationGeneration || !oldTarget ||
@@ -1769,7 +1770,7 @@ export function createTelegramBusFollowerThreadRestoreHandler(
       follower,
       target,
       oldTarget,
-      reason: "thread-restore",
+      reason: reason ?? "thread-restore",
     });
     const current = deps.followerRegistry.get(record.instanceId);
     if (!replaced || !current ||
@@ -2612,7 +2613,8 @@ function parseReplaceFollowerTargetEnvelope(
     typeof value.recipientInstanceId !== "string" ||
     !target ||
     (value.oldTarget !== undefined && !oldTarget) ||
-    value.reason !== "thread-restore" ||
+    value.reason !== "thread-restore" &&
+    value.reason !== "operator-attach" ||
     typeof value.sentAtMs !== "number"
   ) {
     return undefined;

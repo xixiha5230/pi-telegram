@@ -1907,6 +1907,77 @@ test("Bus follower target replacement handler persists restored target", async (
   ]);
 });
 
+test("Bus follower operator attach re-homes a live Thread with its own action label", async () => {
+  const upserts: unknown[] = [];
+  const events: unknown[] = [];
+  const registrationState = createTelegramBusFollowerRegistrationState();
+  registrationState.setRegistered(true, { chatId: 42, threadId: 11 }, { generation: "g" });
+  let syncState = {};
+  const handler = createTelegramBusFollowerTargetReplacementHandler({
+    topicTargetStore: {
+      load: async () => undefined,
+      list: () => [
+        {
+          profileKey: "manual:old",
+          owner: { kind: "manual-follower", instanceId: "old" },
+          instanceId: "inst-a",
+          target: { chatId: 42, threadId: 11 },
+          status: "active",
+          createdAtMs: 1000,
+          updatedAtMs: 1000,
+          slot: "E",
+          threadName: "Ember",
+        },
+      ],
+      markStaleByTarget: () => true,
+      upsert: (record) => {
+        upserts.push(record);
+        return record;
+      },
+      persist: async () => undefined,
+    },
+    registrationState,
+    instanceId: "inst-a",
+    getManualFollowerProfileKey: () => "manual:new",
+    manualFollowerOwnerId: "new",
+    getSyncState: () => syncState,
+    setSyncState: (state) => {
+      syncState = state;
+    },
+    getNowMs: () => 2000,
+    updateStatus: () => undefined,
+    recordRuntimeEvent: (_category, message, details) => {
+      events.push({ message, details });
+    },
+  });
+  await handler(
+    {
+      target: { chatId: 42, threadId: 12 },
+      oldTarget: { chatId: 42, threadId: 11 },
+      reason: "operator-attach",
+      registrationGeneration: "g",
+    },
+    "ctx",
+  );
+  assert.equal(registrationState.getTarget()?.threadId, 12);
+  assert.equal(
+    (upserts[0] as { lastReconcileAction?: string }).lastReconcileAction,
+    "follower-thread-attach",
+  );
+  assert.deepEqual(events, [
+    {
+      message: "Telegram follower thread target replaced",
+      details: {
+        phase: "follower-thread-attach",
+        chatId: 42,
+        threadId: 12,
+        oldThreadId: 11,
+        slot: "E",
+      },
+    },
+  ]);
+});
+
 test("Follower target replacement is rejected before store mutation by a retained fence", async () => {
   const dir = mkdtempSync(join(tmpdir(), "pi-telegram-follower-replacement-fence-"));
   const admission = createTelegramWorkspaceAdmissionLedger({

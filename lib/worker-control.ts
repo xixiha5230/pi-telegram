@@ -41,6 +41,18 @@ export interface TelegramWorkerControlPort {
   stop: (workerId: string) => Promise<{ ok: boolean; message: string }>;
   restart: (workerId: string) => Promise<{ ok: boolean; message: string }>;
   logs?: (workerId: string) => Promise<{ ok: boolean; message: string }>;
+  /**
+   * Re-home a live worker's Telegram Thread to `target` so inbound delivery actually
+   * follows the attachment. Absent means this topology cannot attach threads.
+   */
+  attach?: (input: {
+    workerId: string;
+    target: TelegramTarget;
+  }) => Promise<{ ok: boolean; message: string }>;
+  /** Undo the most recent attach recorded for `target`. */
+  detach?: (input: {
+    target: TelegramTarget;
+  }) => Promise<{ ok: boolean; message: string }>;
 }
 
 export interface TelegramWorkerCommandContext {
@@ -456,15 +468,21 @@ export function createTelegramWorkerControl(
       case "attach": {
         const worker = deps.workers.get(command.workerId);
         if (!worker) return { ok: false, html: NOTICE_UNKNOWN_WORKER };
-        const result = deps.routes.set({
-          target: context.target,
+        if (!deps.control?.attach) {
+          return {
+            ok: false,
+            html: "⚠️ **Thread attachment is unavailable in this topology.**",
+          };
+        }
+        const result = await deps.control.attach({
           workerId: worker.workerId,
-          registrationGeneration: worker.registrationGeneration,
-          epoch: context.epoch,
-          ...(context.nowMs !== undefined ? { nowMs: context.nowMs } : {}),
+          target: context.target,
         });
         if (!result.ok) {
-          return { ok: false, html: "⚠️ **Could not attach the Pi worker.**" };
+          return {
+            ok: false,
+            html: `⚠️ **Could not attach the Pi worker.**\n<i>${escapeTelegramHtml(result.message)}</i>`,
+          };
         }
         return {
           ok: true,
@@ -472,13 +490,13 @@ export function createTelegramWorkerControl(
         };
       }
       case "detach": {
-        const cleared = deps.routes.clear({
-          target: context.target,
-          epoch: context.epoch,
-        });
-        return cleared
+        if (!deps.control?.detach) {
+          return { ok: true, html: "ℹ️ **This thread had no Pi worker.**" };
+        }
+        const result = await deps.control.detach({ target: context.target });
+        return result.ok
           ? { ok: true, html: "✅ **Detached this thread.**" }
-          : { ok: true, html: "ℹ️ **This thread had no Pi worker.**" };
+          : { ok: true, html: `ℹ️ **${escapeTelegramHtml(result.message)}**` };
       }
       case "stopAsk": {
         const worker = deps.workers.get(command.workerId);

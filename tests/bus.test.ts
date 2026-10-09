@@ -739,6 +739,29 @@ test("Bus contract encodes and parses follower target replacement envelopes", ()
       sentAtMs: 6000,
     },
   );
+  // Operator attach is a distinct, allowed reason for the same durable binding move.
+  assert.deepEqual(
+    parseTelegramBusEnvelope(
+      encodeTelegramBusEnvelope({
+        kind: "leader.replaceFollowerTarget",
+        requestId: "leader:7",
+        recipientInstanceId: "inst-b",
+        target: { chatId: 7, threadId: 43 },
+        oldTarget: { chatId: 7, threadId: 42 },
+        reason: "operator-attach",
+        sentAtMs: 7000,
+      }).trimEnd(),
+    ),
+    {
+      kind: "leader.replaceFollowerTarget",
+      requestId: "leader:7",
+      recipientInstanceId: "inst-b",
+      target: { chatId: 7, threadId: 43 },
+      oldTarget: { chatId: 7, threadId: 42 },
+      reason: "operator-attach",
+      sentAtMs: 7000,
+    },
+  );
   assert.equal(
     parseTelegramBusEnvelope(
       JSON.stringify({

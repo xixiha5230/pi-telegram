@@ -21,6 +21,8 @@ export interface TelegramDaemonStateSnapshot {
   version: number;
   workers: readonly unknown[];
   routes: readonly unknown[];
+  /** Operator `/attach` bindings: the thread a worker was re-homed from. */
+  attachments?: readonly unknown[];
 }
 
 export interface TelegramDaemonStorePorts {
@@ -30,11 +32,16 @@ export interface TelegramDaemonStorePorts {
 
 export interface TelegramDaemonStore {
   load: () =>
-    | { workers: readonly unknown[]; routes: readonly unknown[] }
+    | {
+        workers: readonly unknown[];
+        routes: readonly unknown[];
+        attachments: readonly unknown[];
+      }
     | undefined;
   save: (state: {
     workers: readonly unknown[];
     routes: readonly unknown[];
+    attachments?: readonly unknown[];
   }) => void;
 }
 
@@ -62,13 +69,18 @@ export function createTelegramDaemonStore(
         return undefined;
       }
       if (!isValidSnapshot(parsed)) return undefined;
-      return { workers: parsed.workers, routes: parsed.routes };
+      return {
+        workers: parsed.workers,
+        routes: parsed.routes,
+        attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
+      };
     },
     save(state) {
       const snapshot: TelegramDaemonStateSnapshot = {
         version: TELEGRAM_DAEMON_STATE_VERSION,
         workers: state.workers,
         routes: state.routes,
+        attachments: state.attachments ?? [],
       };
       ports.write(`${JSON.stringify(snapshot)}\n`);
     },

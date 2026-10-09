@@ -118,9 +118,24 @@ export function createTelegramDaemon(
       Paths.resolveTelegramProfileTempFilePath("daemon", "json"),
     ),
   );
+  const attachments = new Map<
+    string,
+    { workerId: string; previousTarget: { chatId: number; threadId: number } }
+  >();
+  const attachmentKey = (target: {
+    chatId: number;
+    threadId?: number;
+  }): string => `${target.chatId}:${target.threadId ?? 0}`;
   const persist = (): void => {
     try {
-      store.save({ workers: workers.serialize(), routes: routes.serialize() });
+      store.save({
+        workers: workers.serialize(),
+        routes: routes.serialize(),
+        attachments: [...attachments.entries()].map(([key, value]) => ({
+          key,
+          ...value,
+        })),
+      });
     } catch (error) {
       core.ports.recordRuntimeEvent?.("daemon", error, { phase: "persist" });
     }
@@ -136,6 +151,33 @@ export function createTelegramDaemon(
   if (restored) {
     workers.restore(restored.workers as readonly TelegramWorkerSnapshot[]);
     routes.restore(restored.routes as readonly TelegramRouteSnapshot[]);
+    for (const entry of restored.attachments) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as {
+        key?: unknown;
+        workerId?: unknown;
+        previousTarget?: unknown;
+      };
+      const previous = record.previousTarget as
+        | { chatId?: unknown; threadId?: unknown }
+        | undefined;
+      if (
+        typeof record.key !== "string" ||
+        typeof record.workerId !== "string" ||
+        !previous ||
+        !Number.isSafeInteger(previous.chatId) ||
+        !Number.isSafeInteger(previous.threadId)
+      ) {
+        continue;
+      }
+      attachments.set(record.key, {
+        workerId: record.workerId,
+        previousTarget: {
+          chatId: previous.chatId as number,
+          threadId: previous.threadId as number,
+        },
+      });
+    }
   }
   // Mirror only workers this daemon spawned itself (`pi --mode rpc`). Attached
   // followers stay outside the control plane: their Telegram transport is owned by
@@ -434,6 +476,107 @@ export function createTelegramDaemon(
     const entry = supervisor?.list().find((worker) => worker.pid === follower.pid);
     if (entry) workerUi?.cancelWorker(entry.spec);
   };
+  /**
+   * Move a live worker's Telegram Thread to `target` so inbound delivery follows the
+   * operator's attachment. The worker's directory identity is unchanged; only its
+   * current Thread attribute moves, and the previous Thread is retained for `/detach`.
+   */
+  const attachWorkerTarget = async (input: {
+    workerId: string;
+    target: { chatId: number; threadId?: number };
+  }): Promise<{ ok: boolean; message: string }> => {
+    const follower = core.ports.busFollowers.get(input.workerId);
+    const workerTarget = follower?.target;
+    const registrationGeneration =
+      follower?.registrationGeneration ??
+      workers.get(input.workerId)?.registrationGeneration;
+    const threadId = input.target.threadId;
+    if (!registrationGeneration || !workerTarget || workerTarget.threadId === undefined) {
+      return { ok: false, message: "That Pi worker has no live Thread to move." };
+    }
+    if (threadId === undefined) {
+      return { ok: false, message: "Attach a forum topic, not the General thread." };
+    }
+    if (input.target.chatId !== workerTarget.chatId) {
+      return { ok: false, message: "A worker can only move within its own chat." };
+    }
+    if (threadId === workerTarget.threadId) {
+      routes.set({
+        target: { chatId: input.target.chatId, threadId },
+        workerId: input.workerId,
+        registrationGeneration,
+        epoch,
+      });
+      return { ok: true, message: "This thread already serves that worker." };
+    }
+    const replaced = await core.ports.replaceFollowerServeTarget({
+      record: { instanceId: input.workerId },
+      target: { chatId: input.target.chatId, threadId },
+      oldTarget: { chatId: workerTarget.chatId, threadId: workerTarget.threadId },
+      reason: "operator-attach",
+    });
+    if (!replaced) {
+      return { ok: false, message: "The Pi worker refused the Thread move." };
+    }
+    attachments.set(attachmentKey({ chatId: input.target.chatId, threadId }), {
+      workerId: input.workerId,
+      previousTarget: {
+        chatId: workerTarget.chatId,
+        threadId: workerTarget.threadId,
+      },
+    });
+    routes.set({
+      target: { chatId: input.target.chatId, threadId },
+      workerId: input.workerId,
+      registrationGeneration,
+      epoch,
+    });
+    persist();
+    return { ok: true, message: "moved" };
+  };
+  /**
+   * Undo the most recent `/attach` for this Thread by moving the worker back to the
+   * Thread it served before. Refuses when no attachment is recorded rather than
+   * guessing which Thread the worker belongs in.
+   */
+  const detachWorkerTarget = async (input: {
+    target: { chatId: number; threadId?: number };
+  }): Promise<{ ok: boolean; message: string }> => {
+    const threadId = input.target.threadId;
+    if (threadId === undefined) {
+      return { ok: false, message: "This thread had no attached Pi worker." };
+    }
+    const key = attachmentKey(input.target);
+    const record = attachments.get(key);
+    if (!record) {
+      return { ok: false, message: "This thread had no attached Pi worker." };
+    }
+    const follower = core.ports.busFollowers.get(record.workerId);
+    const currentTarget = follower?.target;
+    const replaced = await core.ports.replaceFollowerServeTarget({
+      record: { instanceId: record.workerId },
+      target: record.previousTarget,
+      ...(currentTarget?.threadId !== undefined
+        ? {
+            oldTarget: {
+              chatId: currentTarget.chatId,
+              threadId: currentTarget.threadId,
+            },
+          }
+        : {}),
+      reason: "operator-attach",
+    });
+    if (!replaced) {
+      return { ok: false, message: "The Pi worker could not be moved back." };
+    }
+    attachments.delete(key);
+    routes.clear({
+      target: { chatId: input.target.chatId, threadId },
+      epoch,
+    });
+    persist();
+    return { ok: true, message: "moved" };
+  };
   const control = createTelegramWorkerControl({
     workers,
     routes,
@@ -454,6 +597,8 @@ export function createTelegramDaemon(
                 cancelWorkerUiForWorkerId(worker);
                 return supervisor.restart(worker);
               },
+              attach: attachWorkerTarget,
+              detach: detachWorkerTarget,
             } satisfies TelegramWorkerControlPort,
           }
         : {}),

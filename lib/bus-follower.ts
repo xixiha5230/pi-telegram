@@ -573,7 +573,7 @@ export interface TelegramBusForwardedUpdateReceiverRuntimeDeps<TContext> {
     input: {
       target: TelegramTarget & { threadId: number };
       oldTarget?: TelegramTarget & { threadId: number };
-      reason: "thread-restore";
+      reason: "thread-restore" | "operator-attach";
       registrationGeneration: string;
     },
     ctx: TContext,
@@ -676,6 +676,11 @@ export function createTelegramBusFollowerTargetReplacementHandler<TContext>(
     deps,
     "workspace.replace-follower-target",
     async () => {
+      // Restore re-keys a deleted tab; operator attach deliberately re-homes a live
+      // worker Thread. Both are the same durable binding move, labelled truthfully.
+      const action = input.reason === "operator-attach"
+        ? "follower-thread-attach"
+        : "follower-thread-restore";
       const assertCurrent = (expectedTarget = input.oldTarget): void => {
         const target = deps.registrationState.getTarget();
         if (
@@ -718,7 +723,9 @@ export function createTelegramBusFollowerTargetReplacementHandler<TContext>(
       deps.topicTargetStore.markStaleByTarget(
         input.oldTarget!,
         "deleted",
-        "Follower thread was replaced by thread restore.",
+        input.reason === "operator-attach"
+          ? "Follower thread was re-homed by operator attach."
+          : "Follower thread was replaced by thread restore.",
       );
       const profileKey =
         currentRecord?.profileKey ?? deps.getManualFollowerProfileKey();
@@ -734,7 +741,7 @@ export function createTelegramBusFollowerTargetReplacementHandler<TContext>(
         createdAtMs: currentRecord?.createdAtMs ?? nowMs,
         updatedAtMs: nowMs,
         lastSyncObservedAtMs: nowMs,
-        lastReconcileAction: "follower-thread-restore",
+        lastReconcileAction: action,
         instanceId: deps.instanceId,
         slot: currentSlot,
         threadName: currentRecord?.threadName,
@@ -753,7 +760,7 @@ export function createTelegramBusFollowerTargetReplacementHandler<TContext>(
           "target-bindings",
           {
             nowMs,
-            action: "follower-thread-restore",
+            action,
           },
         ),
       );
@@ -762,7 +769,7 @@ export function createTelegramBusFollowerTargetReplacementHandler<TContext>(
         "bus",
         "Telegram follower thread target replaced",
         {
-          phase: "follower-thread-restore",
+          phase: action,
           chatId: input.target.chatId,
           threadId: input.target.threadId,
           oldThreadId:

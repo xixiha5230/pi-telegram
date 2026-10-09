@@ -31,7 +31,7 @@ test("Daemon store round-trips a valid snapshot", () => {
   const store = createTelegramDaemonStore(memory.ports);
   store.save({ workers: [{ workerId: "w1" }], routes: [] });
   const loaded = store.load();
-  assert.deepEqual(loaded, { workers: [{ workerId: "w1" }], routes: [] });
+  assert.deepEqual(loaded, { workers: [{ workerId: "w1" }], routes: [], attachments: [] });
   assert.match(String(memory.current()), new RegExp(`"version":${TELEGRAM_DAEMON_STATE_VERSION}`));
 });
 

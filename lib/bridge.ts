@@ -2058,6 +2058,12 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     deliveryLifecycleRuntime,
     busFollowers: telegramBusFollowerRegistry,
     workerControl: telegramBusLeaderRuntime.workerControl,
+    /**
+     * Re-home a live worker Thread under operator authority. The daemon uses this so
+     * `/attach` actually moves delivery instead of only editing its own route
+     * projection. Generation- and epoch-fenced at the follower boundary.
+     */
+    replaceFollowerServeTarget: restoreFollowerThreadTarget,
     sessionContextStore: telegramSessionContextStore,
     sendTextReply,
     sendMarkdownReply,

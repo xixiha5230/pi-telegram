@@ -12,6 +12,7 @@ import { getTelegramUpdateHandlerRegistry } from "./updates.ts";
 import type { TelegramTarget } from "./target.ts";
 import {
   TELEGRAM_WORKER_MENU_CALLBACKS,
+  type TelegramWorkerCommand,
   type TelegramWorkerControl,
   type TelegramWorkerControlResult,
   type TelegramWorkerInlineKeyboard,
@@ -52,8 +53,8 @@ export interface TelegramWorkerCommandDeps {
   ) => void;
 }
 
-/** The daemon thread exposes exactly one command; everything else is a button. */
-const DAEMON_COMMAND_NAMES = new Set(["daemon"]);
+/** The daemon thread handles the panel plus operator Thread attachment. */
+const DAEMON_COMMAND_NAMES = new Set(["daemon", "attach", "detach"]);
 
 function readCallbackQuery(
   update: unknown,
@@ -265,21 +266,27 @@ export function registerTelegramWorkerCommands(
     if (!source) return "pass";
     const trimmed = source.text.trim();
     if (!trimmed.startsWith("/")) return "pass";
-    const [rawName = ""] = trimmed.slice(1).split(/\s+/u);
+    const [rawName = "", ...rest] = trimmed.slice(1).split(/\s+/u);
     const name = rawName.split("@")[0]?.toLowerCase() ?? "";
     if (!DAEMON_COMMAND_NAMES.has(name)) return "pass";
     if (deps.isDaemonOwnedTarget && !deps.isDaemonOwnedTarget(source.target)) {
       // Follower-owned thread: let the update route to its worker.
       return "pass";
     }
+    const command: TelegramWorkerCommand =
+      name === "attach"
+        ? { kind: "attach", workerId: (rest[0] ?? "").trim() }
+        : name === "detach"
+          ? { kind: "detach" }
+          : { kind: "menu" };
     let html = "⚠️ **The daemon control menu failed.**";
     let ok = false;
     let keyboard: TelegramWorkerInlineKeyboard | undefined;
     try {
-      const result = await deps.control.execute(
-        { kind: "menu" },
-        { target: source.target, epoch: deps.epoch },
-      );
+      const result = await deps.control.execute(command, {
+        target: source.target,
+        epoch: deps.epoch,
+      });
       html = result.html;
       ok = result.ok;
       keyboard = result.keyboard;

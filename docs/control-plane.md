@@ -323,9 +323,13 @@ in place instead of replacing the panel with a result notice.
 | 🧹 Threads | Inactive-Thread cleanup: a **proof-only** review, `🗑 Delete reviewed`, the delete-on-quit switch, the unattended janitor switch, then ↩️ Menu |
 | ✖️ Close | The only action that dismisses the panel message |
 
-Any other `/command` in a daemon-owned thread is not handled by the daemon: it falls
-through to normal routing, and Pi's own commands stay available in each worker's
-thread. Worker-owned threads always pass through to their worker.
+The daemon thread also accepts `/attach <workerId>` and `/detach`. Attaching re-homes
+that worker's Telegram Thread to the current thread so inbound delivery follows the
+attachment; detaching moves it back to the Thread it served before. Both are
+epoch-fenced, verify the worker, chat, and Thread before acting, and fail closed when
+the move is not eligible. Any other `/command` in a daemon-owned thread is not handled
+by the daemon: it falls through to normal routing, and Pi's own commands stay available
+in each worker's thread. Worker-owned threads always pass through to their worker.
 
 Session/project switching is dispatched only after the originating update is durably
 settled, and only through `WorkerControlPort`.
@@ -341,6 +345,10 @@ roster; `/attach`, `/detach`, and managed-worker lifecycle require the daemon.
 - **Cross-project switch keeps the same tab and re-aligns it** to the new project: the `threadId` and slot are preserved, the project binding and title are updated, and the previous project binding becomes a dormant restore hint.
 - Concurrent workers in one project receive the existing deterministic suffix disambiguation.
 - A dormant binding never authorizes routing; only a live, registered worker route does.
+- **Operator attach** (`/attach`) re-homes a worker's Thread to another topic in the
+  same chat; the worker's directory identity is unchanged and the previous Thread is
+  retained for `/detach`. Delivery follows the worker's current Thread, so an
+  attachment is a real binding move, never a projection-only route edit.
 - The daemon owns all thread creation, title edits, and cleanup. Workers never call topic APIs directly.
 
 ## Session And Project Switching
