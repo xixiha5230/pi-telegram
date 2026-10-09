@@ -296,7 +296,7 @@ Durable inbound admission is a **process-crash recovery** guarantee. Atomic priv
 - Replace Pi session lifecycle without an official Pi API.
 - Let non-owner Telegram users control the bridge.
 
-Telegram is a companion surface around a live Pi runtime, not a second runtime. It can compact the current session, but it cannot create, resume, fork, browse, or switch sessions until Pi exposes safe public extension APIs for those operations.
+Telegram is a companion surface around a live Pi runtime, not a second runtime. It can compact the current session and browse or switch saved sessions (`/projects`, `/sessions`, `/open`), but it cannot resume through other entry points, fork, navigate the session tree, or clear the TUI transcript until Pi exposes safe public extension APIs for those operations.
 
 An optional external daemon (`pi-telegram-daemon`) can own Telegram transport for a bot profile and supervise managed `pi --mode rpc` workers plus attached terminal Pi instances. It is a separate process and an explicit operator choice; without it the companion runs exactly as above. See [Control Plane](./docs/control-plane.md).
 

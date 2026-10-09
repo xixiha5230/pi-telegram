@@ -53,8 +53,8 @@ export interface TelegramWorkerCommandDeps {
   ) => void;
 }
 
-/** The daemon thread handles the panel plus operator Thread attachment. */
-const DAEMON_COMMAND_NAMES = new Set(["daemon", "attach", "detach"]);
+/** The daemon thread handles the panel, the roster, and operator Thread attachment. */
+const DAEMON_COMMAND_NAMES = new Set(["daemon", "workers", "attach", "detach"]);
 
 function readCallbackQuery(
   update: unknown,
@@ -274,11 +274,13 @@ export function registerTelegramWorkerCommands(
       return "pass";
     }
     const command: TelegramWorkerCommand =
-      name === "attach"
-        ? { kind: "attach", workerId: (rest[0] ?? "").trim() }
-        : name === "detach"
-          ? { kind: "detach" }
-          : { kind: "menu" };
+      name === "workers"
+        ? deps.control.parse(rest.join(" "))
+        : name === "attach"
+          ? { kind: "attach", workerId: (rest[0] ?? "").trim() }
+          : name === "detach"
+            ? { kind: "detach" }
+            : { kind: "menu" };
     let html = "⚠️ **The daemon control menu failed.**";
     let ok = false;
     let keyboard: TelegramWorkerInlineKeyboard | undefined;

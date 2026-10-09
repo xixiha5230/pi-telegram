@@ -70,7 +70,7 @@ report so the override is visible.
 
 ## 5. Repository facts
 
-- `index.ts` is the Pi extension entry; `bin/pi-telegram-daemon.mjs` the daemon entry.
+- `index.ts` is the thin package entrypoint that re-exports `lib/extension.ts`, the Pi extension entry; `bin/pi-telegram-daemon.mjs` the daemon entry.
 - `lib/` holds flat domains; `lib/bridge.ts` is a declarative composition root shared by
   the Pi extension and the daemon, so domain logic belongs in its owning module and never
   in the composition root.

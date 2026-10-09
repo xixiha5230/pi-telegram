@@ -26,7 +26,7 @@ Living index of project documentation in `/docs`.
 - [callback-namespaces.md](./callback-namespaces.md) — Shared Telegram `callback_data` namespace standard for layered extensions
 - [updates.md](./updates.md) — Update classification and runtime handler registry that lets layered extensions observe and consume Telegram updates without owning their own polling connection
 - [multi-instance-bus.md](./multi-instance-bus.md) — Optional multi-instance Telegram bus architecture: profile-scoped transport, leader/follower routing, thread targets, instance slots, manual follower registration, and recovery semantics
-- [control-plane.md](./control-plane.md) — Approved (not yet implemented) external `pi-telegram-daemon` control-plane contract: daemon-owned transport, managed/attached workers, supervisor launch specs, route identity, restart/graceful-drain semantics, and credential boundaries
+- [control-plane.md](./control-plane.md) — External `pi-telegram-daemon` control-plane contract: daemon-owned transport, managed/attached workers, supervisor launch specs, route identity, restart/graceful-drain semantics, token isolation, and credential boundaries
 - [sections.md](./sections.md) — Telegram Extension Sections Standard: registration contract, context ports, callback routing, navigation hierarchy, and demo reference for pi extensions that want Telegram UI surfaces
 - [voice.md](./voice.md) — Voice integration guide: detection, reply policy, STT/TTS provider registration, provider-owned conversion, and transparent interception
 - [ui-style.md](./ui-style.md) — Inline UI style guide for buttons, toggles, tabs, option lists, cards, and dialogs

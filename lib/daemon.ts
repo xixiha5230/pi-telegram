@@ -513,6 +513,16 @@ export function createTelegramDaemon(
     if (threadId === undefined) {
       return { ok: false, message: "Attach a forum topic, not the General thread." };
     }
+    // The daemon's own thread carries the control panel; moving a worker onto it would
+    // collide with the panel. Refuse instead of silently breaking the surface.
+    const daemonTarget = core.cleanup.getLeaderTarget();
+    if (
+      daemonTarget &&
+      daemonTarget.chatId === input.target.chatId &&
+      daemonTarget.threadId === threadId
+    ) {
+      return { ok: false, message: "The daemon control thread cannot serve a worker." };
+    }
     if (input.target.chatId !== workerTarget.chatId) {
       return { ok: false, message: "A worker can only move within its own chat." };
     }

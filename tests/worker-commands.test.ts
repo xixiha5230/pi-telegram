@@ -11,6 +11,7 @@ import { getTelegramUpdateHandlerRegistry } from "../lib/updates.ts";
 import { createTelegramRouteRegistry } from "../lib/route-registry.ts";
 import { createTelegramWorkerRegistry } from "../lib/worker-registry.ts";
 import { createTelegramWorkerControl } from "../lib/worker-control.ts";
+import { createPiLeaderWorkerControl } from "../lib/pi-worker-roster.ts";
 import { registerTelegramWorkerCommands } from "../lib/worker-commands.ts";
 
 const epoch = "epoch-1";
@@ -80,6 +81,43 @@ const callback = (data: string) => ({
   },
 });
 
+test("Pi-owned topology serves /workers through the leader roster", async () => {
+  const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+  const control = createPiLeaderWorkerControl({
+    getLockState: () => ({
+      kind: "active-here",
+      lock: {
+        pid: 25547,
+        cwd: "/repo/pi-telegram",
+        instanceId: "25547:1000",
+        runtimeGeneration: 1000,
+      },
+    }),
+    listFollowers: () => [],
+    getSessionId: () => "session-leader",
+  });
+  const dispose = registerTelegramWorkerCommands({
+    control,
+    epoch: "pi-leader",
+    api: {
+      call: async (method, params) => {
+        calls.push({ method, params });
+        return {};
+      },
+    },
+  });
+  try {
+    // The standalone topology must reach the leader-gated roster, not the model.
+    assert.equal(
+      await getTelegramUpdateHandlerRegistry().dispatch(threadMessage("/workers")),
+      "consume",
+    );
+    assert.match(String(calls[0]?.params.text), /Live Pi workers/u);
+  } finally {
+    dispose();
+  }
+});
+
 test("Daemon menu consumes /daemon and replies with action buttons", async () => {
   const { calls, dispose, registry } = setup({ renderStatus: true });
   try {
@@ -105,8 +143,6 @@ test("Daemon menu no longer handles any other command", async () => {
   const { calls, dispose, registry } = setup({ renderStatus: true });
   try {
     for (const text of [
-      "/workers",
-      "/workers start /tmp/x",
       "/status",
       "/start",
       "/help",
@@ -115,6 +151,32 @@ test("Daemon menu no longer handles any other command", async () => {
       assert.equal(await registry.dispatch(threadMessage(text)), "pass", text);
     }
     assert.equal(calls.length, 0);
+  } finally {
+    dispose();
+  }
+});
+
+test("Daemon thread serves /workers through the control parser", async () => {
+  const { workers, calls, dispose, registry } = setup();
+  workers.register({
+    workerId: "w1",
+    kind: "attached",
+    pid: 1,
+    processBirthId: "w1:born",
+    runtimeGeneration: 1,
+    cwd: "/repo/plugins",
+    sessionId: "s1",
+  });
+  try {
+    assert.equal(await registry.dispatch(threadMessage("/workers")), "consume");
+    assert.match(String(calls[0]?.params.text), /Live Pi workers/u);
+    calls.length = 0;
+    // The parser owns the verb; lifecycle stays unavailable without a control port.
+    assert.equal(
+      await registry.dispatch(threadMessage("/workers start /tmp/x")),
+      "consume",
+    );
+    assert.match(String(calls[0]?.params.text), /unavailable/u);
   } finally {
     dispose();
   }
