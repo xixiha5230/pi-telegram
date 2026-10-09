@@ -154,3 +154,19 @@ export function resolveTelegramFollowerJournalPath(
 export function resolveTelegramRuntimeLogPath(): string {
   return resolveTelegramProfileTempFilePath("logs", "jsonl");
 }
+
+/**
+ * Daemon-published bot identity (<agentDir>/tmp/telegram/daemon-identity[.<profile>].json).
+ * A tokenless attached worker reads this instead of the shared profile token.
+ */
+export function resolveTelegramDaemonIdentityPath(
+  agentDir = resolveAgentDir(),
+  profileName?: string,
+): string {
+  return resolveTelegramProfileTempFilePath(
+    "daemon-identity",
+    "json",
+    agentDir,
+    profileName,
+  );
+}

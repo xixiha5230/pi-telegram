@@ -19,12 +19,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 
 import type { TelegramConfig } from "../lib/config.ts";
+import { resolveTelegramDaemonIdentityPath } from "../lib/paths.ts";
 import {
   getTelegramBotTokenDiagnostic,
   resolveTelegramBotToken,
@@ -718,6 +719,51 @@ test("Telegram config store ignores malformed worker identity env", () => {
   });
   assert.equal(store.getBotToken(), "real-token");
   assert.equal(store.getBotIdentity()?.tokenSha256.length, 64);
+});
+
+test("A tokenless worker keys from the daemon identity and fails closed without it", async () => {
+  const agentDir = await mkdtemp(join(tmpdir(), "pi-telegram-tokenless-"));
+  const configPath = join(agentDir, "telegram.json");
+  const token = "worker-token";
+  const tokenSha256 = createHash("sha256").update(token).digest("hex");
+  try {
+    const writer = createTelegramConfigStore({
+      agentDir,
+      configPath,
+      initialConfig: {
+        profiles: { default: { botToken: token, botId: 9, allowedUserId: 7 } },
+      },
+    });
+    await writer.persist();
+    // No daemon identity published: a tokenless worker holds no token and no identity.
+    const missing = createTelegramConfigStore({
+      agentDir,
+      configPath,
+      env: { PI_TELEGRAM_TOKENLESS_WORKER: "1" },
+    });
+    await missing.load();
+    assert.equal(missing.getBotToken(), undefined);
+    assert.equal(missing.hasBotToken(), false);
+    // The daemon publishes the digest; the worker keys from it without the token.
+    const identityPath = resolveTelegramDaemonIdentityPath(agentDir, undefined);
+    fs.mkdirSync(dirname(identityPath), { recursive: true });
+    fs.writeFileSync(identityPath, JSON.stringify({ tokenSha256, botId: 9 }));
+    const worker = createTelegramConfigStore({
+      agentDir,
+      configPath,
+      env: { PI_TELEGRAM_TOKENLESS_WORKER: "1" },
+    });
+    await worker.load();
+    assert.equal(worker.getBotToken(), undefined);
+    assert.equal(worker.hasBotToken(), true);
+    assert.deepEqual(worker.getBotIdentity(), { tokenSha256, botId: 9 });
+    assert.deepEqual(
+      worker.withPairedUserAdmission("default", tokenSha256, 7, () => "ok"),
+      { admitted: true, value: "ok" },
+    );
+  } finally {
+    await rm(agentDir, { recursive: true, force: true });
+  }
 });
 
 test("Telegram config load recovers invalid JSON and records a diagnostic", async () => {

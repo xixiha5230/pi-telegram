@@ -6,6 +6,7 @@
  */
 
 import * as Pi from "./pi.ts";
+import { TELEGRAM_TOKENLESS_WORKER_ENV } from "./config.ts";
 import type { TelegramWorkerControlCommand } from "./worker-control-protocol.ts";
 import { TELEGRAM_DAEMON_WORKER_ENV } from "./worker-spec.ts";
 import type { TelegramBridgeHost } from "./host.ts";
@@ -76,11 +77,13 @@ export function createPiBridgeHost(
   // transport owner; without this a worker on the default `cluster.leader: "auto"`
   // could promote itself after a daemon crash and lock the restarted daemon out.
   const isDaemonWorker = env[TELEGRAM_DAEMON_WORKER_ENV]?.trim() === "1";
+  // A tokenless attached worker holds no transport authority, so it must never lead.
+  const isTokenlessWorker = env[TELEGRAM_TOKENLESS_WORKER_ENV]?.trim() === "1";
   return {
     api,
     ports: Pi.createExtensionApiRuntimePorts(api),
     workerControl: createPiWorkerControlHandler(api),
-    ...(isDaemonWorker ? { canLead: () => false } : {}),
+    ...(isDaemonWorker || isTokenlessWorker ? { canLead: () => false } : {}),
     helpers: {
       getExtensionContextModel: Pi.getExtensionContextModel,
       getExtensionContextCwd: Pi.getExtensionContextCwd,

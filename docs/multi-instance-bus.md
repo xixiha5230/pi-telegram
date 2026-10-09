@@ -58,6 +58,7 @@ The operator experience:
 - Do not expose arbitrary group participants to prompts, controls, or artifacts.
 - Do not require Threaded Mode for classic private-chat users; classic private-chat mode remains valid and should not receive slot/thread-name guidance.
 - Do not implement leader election through unsafe lock stealing without heartbeats or stale-owner checks.
+- The external daemon is a separate topology, not a bus feature: it reuses this bus for worker routing and control while the bus itself stays a local capability. See [control-plane.md](./control-plane.md).
 
 ## Terms
 

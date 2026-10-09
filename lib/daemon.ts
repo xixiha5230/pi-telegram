@@ -9,7 +9,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { readdirSync, realpathSync, statSync } from "node:fs";
+import { readdirSync, realpathSync, statSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { dirname } from "node:path";
 import * as Pi from "./pi.ts";
 import * as Bus from "./bus.ts";
 import * as Config from "./config.ts";
@@ -638,6 +639,23 @@ export function createTelegramDaemon(
       // before acquiring transport.
       await core.ports.configStore.load();
       core.ports.setCurrentContext(piContext);
+      // Publish the daemon-owned bot identity so a tokenless attached worker can key
+      // itself without the shared token. Redacted: the digest only, never the token.
+      try {
+        const identity = core.ports.configStore.getBotIdentity();
+        const identityPath = Paths.resolveTelegramDaemonIdentityPath(
+          undefined,
+          core.ports.configStore.getActiveProfileName(),
+        );
+        if (identity) {
+          mkdirSync(dirname(identityPath), { recursive: true });
+          writeFileSync(identityPath, `${JSON.stringify(identity)}\n`, { mode: 0o600 });
+        }
+      } catch (error) {
+        core.ports.recordRuntimeEvent?.("daemon", error, {
+          phase: "daemon-identity-publish",
+        });
+      }
       // A cleanup fence left by an earlier attempt blocks every profile admission,
       // including leader-target provisioning, so it would brick startup. Clear it first.
       try {
@@ -733,6 +751,18 @@ export function createTelegramDaemon(
       disposeWorkerUi = undefined;
       workerUi?.dispose();
       supervisor?.dispose();
+      // Best effort: stop advertising a daemon identity nobody may read.
+      try {
+        rmSync(
+          Paths.resolveTelegramDaemonIdentityPath(
+            undefined,
+            core.ports.configStore.getActiveProfileName(),
+          ),
+          { force: true },
+        );
+      } catch {
+        /* best effort */
+      }
       await core.ports.lockedPollingRuntime.stop();
     },
   };

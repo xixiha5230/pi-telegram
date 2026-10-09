@@ -63,10 +63,12 @@ test("Pi worker-control adapter reports unsupported command-context operations",
   );
 });
 
-test("A daemon-managed worker host is permanently non-leading", () => {
+test("A daemon-managed or tokenless worker host is permanently non-leading", () => {
   const api = {} as Pi.ExtensionAPI;
   const managed = createPiBridgeHost(api, { PI_TELEGRAM_DAEMON_WORKER: "1" });
   assert.equal(managed.canLead?.(), false);
+  const tokenless = createPiBridgeHost(api, { PI_TELEGRAM_TOKENLESS_WORKER: "1" });
+  assert.equal(tokenless.canLead?.(), false);
   const terminal = createPiBridgeHost(api, {});
   assert.equal(terminal.canLead, undefined);
   const unrelated = createPiBridgeHost(api, { PI_TELEGRAM_DAEMON_WORKER: "0" });

@@ -19,6 +19,7 @@ import { chmod, mkdir, rename, writeFile } from "node:fs/promises";
 import {
   resolveAgentDir,
   resolveTelegramConfigPath,
+  resolveTelegramDaemonIdentityPath,
   TELEGRAM_DEFAULT_PROFILE_NAME,
 } from "./paths.ts";
 export { TELEGRAM_DEFAULT_PROFILE_NAME } from "./paths.ts";
@@ -168,6 +169,55 @@ export function resolveTelegramBotIdentity(
     tokenSha256: createHash("sha256").update(token).digest("hex"),
     ...(config.botId !== undefined ? { botId: config.botId } : {}),
   };
+}
+
+/**
+ * Env flag: this process is a tokenless attached worker that reads the daemon-published
+ * bot identity instead of the shared profile token. Explicit launch configuration, not
+ * inherited ambient state.
+ */
+export const TELEGRAM_TOKENLESS_WORKER_ENV = "PI_TELEGRAM_TOKENLESS_WORKER";
+
+export interface TelegramDaemonBotIdentity {
+  tokenSha256: string;
+  botId?: number;
+}
+
+/** Strict codec for the daemon-published identity document. */
+export function parseTelegramDaemonBotIdentity(
+  value: unknown,
+): TelegramDaemonBotIdentity | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as { tokenSha256?: unknown; botId?: unknown };
+  if (
+    typeof record.tokenSha256 !== "string" ||
+    !TELEGRAM_BOT_TOKEN_SHA256_PATTERN.test(record.tokenSha256)
+  ) {
+    return undefined;
+  }
+  if (
+    record.botId !== undefined &&
+    (!Number.isSafeInteger(record.botId) || (record.botId as number) <= 0)
+  ) {
+    return undefined;
+  }
+  return {
+    tokenSha256: record.tokenSha256,
+    ...(record.botId !== undefined ? { botId: record.botId as number } : {}),
+  };
+}
+
+/** Read the daemon identity a tokenless attached worker keys itself from. */
+export function readTelegramDaemonBotIdentity(
+  path: string,
+): TelegramDaemonBotIdentity | undefined {
+  try {
+    return parseTelegramDaemonBotIdentity(
+      JSON.parse(readFileSync(path, "utf8")),
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 export type TelegramOutboundCommandTemplateConfig =
@@ -829,6 +879,29 @@ export function createTelegramConfigStore(
     persistedConfig = cloneTelegramConfig(merged);
     config = nextConfig;
   };
+  const tokenlessWorker = env[TELEGRAM_TOKENLESS_WORKER_ENV]?.trim() === "1";
+  let daemonIdentityProfile: string | undefined;
+  let daemonIdentityCache: TelegramBotIdentity | undefined;
+  const readDaemonIdentity = (): TelegramBotIdentity | undefined => {
+    if (!tokenlessWorker) return undefined;
+    const profile = activeProfileName ?? TELEGRAM_DEFAULT_PROFILE_NAME;
+    if (profile !== daemonIdentityProfile) {
+      daemonIdentityProfile = profile;
+      daemonIdentityCache = readTelegramDaemonBotIdentity(
+        resolveTelegramDaemonIdentityPath(agentDir, activeProfileName),
+      );
+    }
+    return daemonIdentityCache;
+  };
+  // A withheld identity (managed-worker digest or daemon identity) replaces the shared
+  // token. A tokenless worker fails closed when the daemon identity is absent.
+  const getWithheldIdentity = (): TelegramBotIdentity | undefined =>
+    getTelegramWorkerBotIdentity(env) ?? readDaemonIdentity();
+  const resolveIdentity = (): TelegramBotIdentity | undefined =>
+    getWithheldIdentity() ??
+    (tokenlessWorker
+      ? undefined
+      : resolveTelegramBotIdentity(getEffectiveConfig(), env));
   const withPersistedPairingProfile = <T>(
     profileName: string, tokenSha256: string,
     observe: (latest: TelegramConfig, profile: TelegramBotProfile) => T,
@@ -840,7 +913,7 @@ export function createTelegramConfigStore(
     return withTelegramFileTransaction(`${configPath}.transaction`, () => {
       const latest = readTelegramConfigForTransaction(configPath);
       const profile = latest.profiles?.[profileName];
-      const workerIdentity = getTelegramWorkerBotIdentity(env);
+      const workerIdentity = getWithheldIdentity();
       const resolvedToken = workerIdentity
         ? undefined
         : typeof profile?.botToken === "string"
@@ -891,16 +964,16 @@ export function createTelegramConfigStore(
     },
     getActiveProfileName: () => activeProfileName,
     getBotToken: () =>
-      getTelegramWorkerBotIdentity(env)
+      getWithheldIdentity() || tokenlessWorker
         ? undefined
         : resolveTelegramBotToken(getEffectiveConfig().botToken, env),
     getBotTokenDiagnostic: () =>
-      getTelegramWorkerBotIdentity(env)
+      getWithheldIdentity() || tokenlessWorker
         ? undefined
         : getTelegramBotTokenDiagnostic(getEffectiveConfig().botToken, env),
-    getBotIdentity: () => resolveTelegramBotIdentity(getEffectiveConfig(), env),
-    hasBotToken: () => !!resolveTelegramBotIdentity(getEffectiveConfig(), env),
-    hasBotIdentity: () => !!resolveTelegramBotIdentity(getEffectiveConfig(), env),
+    getBotIdentity: resolveIdentity,
+    hasBotToken: () => !!resolveIdentity(),
+    hasBotIdentity: () => !!resolveIdentity(),
     getAllowedUserId: () => getEffectiveConfig().allowedUserId,
     getLegacyPollingCursor: () =>
       (getEffectiveConfig() as TelegramConfig & TelegramLegacyCursorCarrier)
