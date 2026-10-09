@@ -176,6 +176,13 @@ export interface TelegramRpcWorkerHost {
   abort: () => Promise<boolean>;
   setModel: (provider: string, modelId: string) => Promise<boolean>;
   setThinkingLevel: (level: string) => Promise<boolean>;
+  /** Drop every queued steering/follow-up message on the worker's native queue. */
+  clearQueue: () => Promise<boolean>;
+  /** Start a fresh session, replacing the worker's current one. */
+  newSession: () => Promise<boolean>;
+  /** Switch the worker to another session file. */
+  switchSession: (sessionPath: string) => Promise<boolean>;
+  compact: () => Promise<boolean>;
 }
 
 export function createTelegramRpcWorkerHost(
@@ -257,5 +264,10 @@ export function createTelegramRpcWorkerHost(
     setModel: (provider, modelId) =>
       settle({ type: "set_model", provider, modelId }),
     setThinkingLevel: (level) => settle({ type: "set_thinking_level", level }),
+    clearQueue: () => settle({ type: "clear_queue" }),
+    newSession: () => settle({ type: "new_session" }),
+    switchSession: (sessionPath) =>
+      settle({ type: "switch_session", sessionPath }),
+    compact: () => settle({ type: "compact" }),
   };
 }

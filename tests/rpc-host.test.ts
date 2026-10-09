@@ -81,6 +81,25 @@ test("Worker host dispatches commands and reports failures", async () => {
   assert.equal(sent[4]?.level, "high");
 });
 
+test("Worker host dispatches session and queue controls over RPC", async () => {
+  const sent: Array<Record<string, unknown>> = [];
+  const host = createTelegramRpcWorkerHost({
+    now: () => NOW,
+    request: async (command) => {
+      sent.push(command);
+      return { type: "response", command: command.type, success: true };
+    },
+  });
+  assert.equal(await host.clearQueue(), true);
+  assert.equal(await host.newSession(), true);
+  assert.equal(await host.switchSession("/sessions/abc.jsonl"), true);
+  assert.equal(await host.compact(), true);
+  assert.deepEqual(sent.map((command) => command.type), [
+    "clear_queue", "new_session", "switch_session", "compact",
+  ]);
+  assert.equal(sent[2]?.sessionPath, "/sessions/abc.jsonl");
+});
+
 test("Worker host publishes state transitions to subscribers once per change", async () => {
   const host = createTelegramRpcWorkerHost({
     now: () => NOW,
