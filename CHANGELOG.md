@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+## 0.53.1: Standalone daemon dependency fix
+
+- `Standalone daemon dependency fix`: `@sinclair/typebox` moves from peerDependencies to dependencies. `lib/` imports it directly at runtime, and the standalone `pi-telegram-daemon` process (launchd/systemd or `/telegram daemon start`) could not resolve it after a later npm install pruned the auto-installed peer, leaving the daemon crash-looping with `ERR_MODULE_NOT_FOUND`. As a real dependency it is always installed and kept.
+
 ## 0.53.0: Unified /telegram command
 
 - `Unified /telegram command`: Breaking: `/telegram-setup`, `/telegram-status`, `/telegram-connect`, `/telegram-disconnect`, and `/telegram-daemon` are replaced by one `/telegram <sub>` entry (`setup`, `status`, `connect`, `disconnect`, `daemon start|stop|status`), so the Pi command palette shows a single Telegram command instead of five. All diagnostics, docs, skills, and the daemon's worker-registration prompt now point at the merged names.
