@@ -1,0 +1,19 @@
+CHANGELOG.md
+  s_26bd2f22699832::t_bb06951c323670 7,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "eae971110e42da8cdbcc4b363315dae5490875fb",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "glm-5.3"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
