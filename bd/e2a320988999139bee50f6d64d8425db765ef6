@@ -1,0 +1,23 @@
+package-lock.json
+  s_26bd2f22699832::t_1eceb728eb3e84 3,9
+CHANGELOG.md
+  s_26bd2f22699832::t_c95ed2dc1e7602 7-8
+package.json
+  s_26bd2f22699832::t_6dd7abd3d0a3ce 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "bde2a320988999139bee50f6d64d8425db765ef6",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "glm-5.3"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
