@@ -1,0 +1,104 @@
+docs/outbound.md
+  s_26bd2f22699832::t_bc686924258d30 8
+tests/locks.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 1509
+lib/menu-settings.ts
+  s_26bd2f22699832::t_5091b079c61371 207
+tests/menu-settings.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 243
+skills/telegram-bridge/references/diagnosis.md
+  s_26bd2f22699832::t_2cdf5deaacdd8e 7-8
+docs/ui-style.md
+  s_26bd2f22699832::t_bc686924258d30 14
+docs/public-api.md
+  s_26bd2f22699832::t_bc686924258d30 45-48,77,80,129,137,191,586
+docs/voice.md
+  s_26bd2f22699832::t_bc686924258d30 143,154
+AGENTS.md
+  s_26bd2f22699832::t_f51ba0cdf3300b 20
+CHANGELOG.md
+  s_26bd2f22699832::t_c5e0cb1c3016d4 7-8
+lib/outbound-attachments.ts
+  s_26bd2f22699832::t_0c015501be2668 384
+lib/locks.ts
+  s_26bd2f22699832::t_b75f5985db89c6 754,1368
+lib/pi.ts
+  s_26bd2f22699832::t_8e0781a6cc8872 120
+tests/status.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 867
+tests/process-shutdown.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 508,512
+lib/outbound.ts
+  s_26bd2f22699832::t_a6ddfecd6fd831 51
+docs/multi-instance-bus.md
+  s_26bd2f22699832::t_bc686924258d30 23,37,48,206-207,218,255,262,264,277-278,282,306,309,438,449,452,482,516
+tests/index.test.ts
+  s_26bd2f22699832::t_e5dbf12927fcb9 86
+lib/bindings.ts
+  s_26bd2f22699832::t_58496bf63d8c52 570
+lib/setup.ts
+  s_26bd2f22699832::t_8c8a91a835cf27 4
+tests/supervisor.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 111
+tests/commands.test.ts
+  s_26bd2f22699832::t_aeed89a08f94af 116-127,339,382,410,444-445,477,507,547-548,592,597,601,718,770,787,824,852,884,924
+  s_26bd2f22699832::t_88dc92bfcb2be6 636,674
+  s_26bd2f22699832::t_904baf5c0452a0 149-150,394,518,685-686
+tests/worker-control-protocol.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 45
+docs/architecture.md
+  s_26bd2f22699832::t_bc686924258d30 50,136,274,326,330,340,370,374,380,382,569,617
+tests/integration.test.ts
+  s_26bd2f22699832::t_36c0ea12f8aa4b 335-347,1081,1299,1396,1530,1804,3142,3251,3360,3599,3702,3760,3805,3811-3812,3820-3821,3826,3874,3913,4059,4164,4420,4578,4734,4873,5019,5127,5160,5232,5402,5470,5529,5584,5654,5845,5970,6138,6360
+lib/daemon-lifecycle.ts
+  s_26bd2f22699832::t_a40b7c238864bc 172
+tests/pi.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 56
+lib/commands.ts
+  s_26bd2f22699832::t_b9bc3781190685 440
+  s_26bd2f22699832::t_376dd474f4a9b8 534-552,554-566,569-589
+  s_26bd2f22699832::t_61a36f320e01bc 590-593,604,630,668,700-703,723,730-752
+lib/recovery.ts
+  s_26bd2f22699832::t_23ed40a9d15fa0 399,414,427,445,460
+tests/skills.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 226-227
+tests/outbound-attachments.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 763,768
+docs/delivery.md
+  s_26bd2f22699832::t_bc686924258d30 193
+docs/control-plane.md
+  s_26bd2f22699832::t_bc686924258d30 157,185,296,298,456
+lib/supervisor.ts
+  s_26bd2f22699832::t_1f939a861ee970 175
+BACKLOG.md
+  s_26bd2f22699832::t_f51ba0cdf3300b 8,30,35
+lib/status.ts
+  s_26bd2f22699832::t_74a113ed1f70d1 1407
+README.md
+  s_26bd2f22699832::t_bc686924258d30 47,50,55,58,60,62,142,183-189,301
+tests/bindings.test.ts
+  s_26bd2f22699832::t_ba637c34e35b7d 72,77-78,80-81,83-88,976,1037,1106,1193,1234
+  s_26bd2f22699832::t_7030ffed9eadff 73-76,79,82
+lib/routing.ts
+  s_26bd2f22699832::t_517061917324d2 351,2385,3127
+tests/routing.test.ts
+  s_26bd2f22699832::t_e1ad8f576b7e43 1529
+docs/activity.md
+  s_26bd2f22699832::t_bc686924258d30 69,272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "228579b911dd84519ca5f0c69aaf2e6401ae7243",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "glm-5.3"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
