@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+## 0.53.0: Unified /telegram command
+
 - `Unified /telegram command`: Breaking: `/telegram-setup`, `/telegram-status`, `/telegram-connect`, `/telegram-disconnect`, and `/telegram-daemon` are replaced by one `/telegram <sub>` entry (`setup`, `status`, `connect`, `disconnect`, `daemon start|stop|status`), so the Pi command palette shows a single Telegram command instead of five. All diagnostics, docs, skills, and the daemon's worker-registration prompt now point at the merged names.
 
 ## 0.52.0: Daemon lifecycle commands
