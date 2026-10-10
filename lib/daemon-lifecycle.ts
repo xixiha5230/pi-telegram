@@ -86,6 +86,8 @@ export interface TelegramDaemonLifecycle {
   stop: () => Promise<{ ok: boolean; message: string }>;
   status: () => TelegramDaemonLifecycleStatus;
   autostartStatus: () => { installed: boolean; path?: string };
+  /** Daemon log path, surfaced so failures are diagnosable. */
+  logPath: () => string;
 }
 
 const START_READY_TIMEOUT_MS = 8_000;
@@ -158,6 +160,7 @@ export function createTelegramDaemonLifecycle(
   return {
     status,
     autostartStatus: () => deps.service.status(),
+    logPath: () => deps.getLogPath(),
     async start(cwd: string) {
       const owner = liveOwner();
       if (owner) {

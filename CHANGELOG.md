@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `Daemon command feedback`: `/telegram daemon start` acknowledges immediately, reports the daemon result, then connects this Pi instance to the daemon so Telegram works in one command instead of leaving the earlier daemon-managed warning until the next session start. `status` is now three lines (daemon, autostart path, log path) and `stop` says Telegram is unavailable until the daemon restarts.
+
 ## 0.53.1: Standalone daemon dependency fix
 
 - `Standalone daemon dependency fix`: `@sinclair/typebox` moves from peerDependencies to dependencies. `lib/` imports it directly at runtime, and the standalone `pi-telegram-daemon` process (launchd/systemd or `/telegram daemon start`) could not resolve it after a later npm install pruned the auto-installed peer, leaving the daemon crash-looping with `ERR_MODULE_NOT_FOUND`. As a real dependency it is always installed and kept.

@@ -566,23 +566,45 @@ export function registerTelegramBridgeCommands(
           );
         }
       }
+      // The start can take several seconds (service install + transport
+      // ownership), so acknowledge immediately instead of blocking silently.
+      ctx.ui.notify(
+        "Starting the Telegram daemon and installing login autostart…",
+        "info",
+      );
       const result = await lifecycle.start(ctx.cwd);
       ctx.ui.notify(result.message, result.ok ? "info" : "error");
       deps.updateStatus(ctx);
+      if (!result.ok) return;
+      // With transport owned by the daemon, connect this Pi instance as a
+      // follower so Telegram works immediately instead of leaving the earlier
+      // daemon-managed warning in place until the next session start.
+      ctx.ui.notify("Connecting this Pi instance to the daemon…", "info");
+      await runConnect("", ctx);
       return;
     }
     if (verb === "stop") {
       const result = await lifecycle.stop();
       ctx.ui.notify(result.message, result.ok ? "info" : "warning");
+      if (result.ok) {
+        ctx.ui.notify(
+          "Telegram is unavailable until the daemon is started again.",
+          "warning",
+        );
+      }
       deps.updateStatus(ctx);
       return;
     }
     if (verb === "status") {
       const autostart = lifecycle.autostartStatus();
-      ctx.ui.notify(
-        `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
-        "info",
-      );
+      const lines = [
+        formatTelegramDaemonStatus(lifecycle.status()),
+        autostart.installed && autostart.path
+          ? `Autostart: installed at ${autostart.path}`
+          : "Autostart: not installed",
+        `Daemon log: ${lifecycle.logPath()}`,
+      ];
+      ctx.ui.notify(lines.join("\n"), "info");
       return;
     }
     ctx.ui.notify("Usage: /telegram daemon start|stop|status", "warning");

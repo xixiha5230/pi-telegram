@@ -377,6 +377,7 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
       },
       status: () => ({ running: true, pid: 1, workers: 2, routes: 1 }),
       autostartStatus: () => ({ installed: false }),
+      logPath: () => "/tmp/daemon.log",
     },
   });
   const command = getTelegramSubcommand(harness.commands, "daemon");
@@ -386,11 +387,21 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
   await command.handler("stop", ctx);
   await command.handler("status", ctx);
   await command.handler("bogus", ctx);
-  assert.deepEqual(calls, ["mode:daemon", "start:/repo", "status", "stop", "status"]);
+  assert.deepEqual(calls, [
+    "mode:daemon",
+    "start:/repo",
+    "status",
+    "status",
+    "stop",
+    "status",
+  ]);
   assert.deepEqual(notifications, [
+    "Starting the Telegram daemon and installing login autostart…",
     "Telegram daemon listening (pid 1); autostart installed.",
+    "Connecting this Pi instance to the daemon…",
     "Telegram daemon stopped. Autostart removed.",
-    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Autostart is not installed.",
+    "Telegram is unavailable until the daemon is started again.",
+    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1.\nAutostart: not installed\nDaemon log: /tmp/daemon.log",
     "Usage: /telegram daemon start|stop|status",
   ]);
 });
