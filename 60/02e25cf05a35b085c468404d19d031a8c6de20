@@ -1,0 +1,31 @@
+CHANGELOG.md
+  s_26bd2f22699832::t_40df1e50e448b8 7-8
+README.md
+  s_26bd2f22699832::t_8654cac16d891d 301
+docs/control-plane.md
+  s_26bd2f22699832::t_3854a73da81edd 288-306
+tests/commands.test.ts
+  s_26bd2f22699832::t_5c01db1ed1167d 342,353-357,379-380,383-390,396-399
+lib/locks.ts
+  s_26bd2f22699832::t_fdc148ddeeb1ab 1368
+lib/commands.ts
+  s_26bd2f22699832::t_71064bec24c446 443-446,563,586-600,603,605,611
+lib/bindings.ts
+  s_26bd2f22699832::t_5db50c887fbb02 572-573,708-715
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "6002e25cf05a35b085c468404d19d031a8c6de20",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
