@@ -154,7 +154,7 @@ pi --mode rpc --approve -n <name> [--session <id>] \
 
 ### Attached worker
 
-The operator starts `pi` in a terminal and runs `/telegram-connect`. The extension:
+The operator starts `pi` in a terminal and runs `/telegram connect`. The extension:
 
 - registers over authenticated local IPC instead of acquiring transport ownership;
 - stops any local polling and reports worker state, project, session, and queue depth;
@@ -182,7 +182,7 @@ Daemon routing, rendering, and command code is identical for both; only the adap
 ### Managed worker = supervised follower
 
 A managed worker is a `pi --mode rpc` process this daemon spawned, running the **same
-bridge extension a terminal Pi runs**. The daemon presses `/telegram-connect` for the
+bridge extension a terminal Pi runs**. The daemon presses `/telegram connect` for the
 operator once the worker's RPC channel answers, so the operator never opens a terminal;
 the worker then registers with the leader as an ordinary follower and the leader
 provisions its Thread exactly as it does for any follower.
@@ -293,9 +293,9 @@ only uses daemon mode.
 - `pi-telegram-daemon --cwd <abs-dir>` runs it in the foreground; it owns transport,
   `getUpdates`, the direct Bot API, the inbound journal, the registry, routing, and the
   supervisor, and shuts down gracefully on `SIGINT`/`SIGTERM`.
-- From Pi, `/telegram-daemon start` installs a login autostart service and starts the
+- From Pi, `/telegram daemon start` installs a login autostart service and starts the
   daemon: a macOS launchd LaunchAgent or a Linux systemd user unit with
-  keep-alive/restart. `/telegram-daemon stop` removes autostart and stops the daemon,
+  keep-alive/restart. `/telegram daemon stop` removes autostart and stops the daemon,
   and `status` reports truth from the durable transport-owner and daemon snapshots.
   Installing autostart is explicit and reversible; an unsupported platform starts a
   detached process without persistence instead of guessing.
@@ -453,7 +453,7 @@ Two independent secrets with different scopes:
 | Lifetime | Profile configuration | Minted at registration, rotated on re-registration, bound to `workerId` + generation |
 
 - **Current limitation:** managed workers load the operator's shared Pi configuration and Telegram profile file; the bot token is not daemon-exclusive yet. The planned per-worker credential and tokenless startup boundary are not implemented.
-- `/telegram-setup`, pairing, and `allowedUserId` therefore remain shared-config behavior for now; do not treat the aspirational table above as a shipped security guarantee.
+- `/telegram setup`, pairing, and `allowedUserId` therefore remain shared-config behavior for now; do not treat the aspirational table above as a shipped security guarantee.
 
 ## Security Boundaries
 

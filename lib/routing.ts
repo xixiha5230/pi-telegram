@@ -348,7 +348,7 @@ function formatTelegramUnboundTopicGuidance(): string {
     "",
     "To create a bound Telegram tab:",
     "<code>1.</code> Start another Pi instance in your terminal.",
-    "<code>2.</code> Run <code>/telegram-connect</code> in that instance.",
+    "<code>2.</code> Run <code>/telegram connect</code> in that instance.",
     "<code>3.</code> The bridge will create and bind a fresh Telegram tab for it.",
   ].join("\n");
 }
@@ -2382,7 +2382,7 @@ export function createTelegramInboundRouteRuntime<
         message.message_id,
         [
           includeGuidance ? formatTelegramUnboundTopicGuidance() : undefined,
-          `This thread is not bound to a Pi instance. Open an active Pi thread or run ${Commands.formatTelegramPiCommandHtml("/telegram-connect")} from a Pi session to bind one.`,
+          `This thread is not bound to a Pi instance. Open an active Pi thread or run ${Commands.formatTelegramPiCommandHtml("/telegram connect")} from a Pi session to bind one.`,
         ]
           .filter((line): line is string => typeof line === "string")
           .join("\n\n"),
@@ -3124,7 +3124,7 @@ export function createTelegramInboundRouteRuntime<
             message.message_id,
             "Instance " +
               escapeHtml(getTelegramThreadRecordLabel(existing, deps.getDisplayTitle)) +
-              ` is not currently registered with the Telegram bus. This thread is preserved; retry shortly. If it does not recover, run ${Commands.formatTelegramPiCommandHtml("/telegram-connect")} in that Pi instance.`,
+              ` is not currently registered with the Telegram bus. This thread is preserved; retry shortly. If it does not recover, run ${Commands.formatTelegramPiCommandHtml("/telegram connect")} in that Pi instance.`,
             { parseMode: "HTML", target },
           );
           return;

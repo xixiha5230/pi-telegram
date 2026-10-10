@@ -172,7 +172,7 @@ export function createTelegramWorkerSupervisor(
   ports: TelegramWorkerSupervisorPorts,
 ): TelegramWorkerSupervisor {
   const now = ports.now ?? Date.now;
-  const registerCommand = ports.registerCommand ?? "/telegram-connect";
+  const registerCommand = ports.registerCommand ?? "/telegram connect";
   const readinessAttempts = ports.readinessAttempts ?? 20;
   const readinessIntervalMs = ports.readinessIntervalMs ?? 1000;
   const killTimeoutMs = ports.killTimeoutMs ?? 8000;

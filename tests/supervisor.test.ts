@@ -108,7 +108,7 @@ test("Supervisor starts a worker by path and registers the follower", async () =
   // Readiness is the RPC channel answering, then the daemon presses the worker's
   // Telegram connect command so the operator never opens a terminal.
   assert.deepEqual(requests.map((request) => request.type), ["get_state", "prompt"]);
-  assert.equal(requests[1]?.message, "/telegram-connect");
+  assert.equal(requests[1]?.message, "/telegram connect");
   assert.equal(supervisor.list()[0]?.state, "running");
 });
 

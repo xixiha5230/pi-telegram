@@ -190,7 +190,7 @@ The binding uses the same `globalThis` membrane pattern as other extension regis
 
 Failures record redacted runtime events under a delivery-specific category with operation, scope kind, profile, and failure reason. Diagnostics must not include bot tokens, unrestricted message bodies, callback payload secrets, or raw transport responses.
 
-A future `getTelegramDeliveryDiagnostics()` is unnecessary for the first slice because callers receive structured results and `/telegram-status` already owns bridge diagnostics. Add a dedicated diagnostics getter only if a real consumer needs registry-level introspection.
+A future `getTelegramDeliveryDiagnostics()` is unnecessary for the first slice because callers receive structured results and `/telegram status` already owns bridge diagnostics. Add a dedicated diagnostics getter only if a real consumer needs registry-level introspection.
 
 ## Security And Non-Goals
 

@@ -44,22 +44,22 @@ Pi is the primary and only officially supported host. Narrow host-neutral adapte
 Run this inside Pi:
 
 ```bash
-/telegram-setup
+/telegram setup
 ```
 
-Paste the bot token. If `~/.pi/agent/telegram.json` already contains a saved token, setup offers it as the default. If no saved token exists, setup prefills the first supported alias (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_KEY`, `TELEGRAM_TOKEN`, or `TELEGRAM_KEY`) as an environment reference such as `$TELEGRAM_BOT_TOKEN`, validates the resolved value, and persists the reference instead of copying the secret. Bot/session identity persists under `profiles.default`; shared handlers and assistant/voice/time settings remain top-level. `/telegram-setup default` and `/telegram-connect default` are exact aliases for the bare commands. Use `/telegram-setup <name>` only when you want an additional bot profile. Cancelling or failing named-profile token validation leaves the currently active profile and polling runtime unchanged; setup reports the profile as saved and connected only after polling startup succeeds.
+Paste the bot token. If `~/.pi/agent/telegram.json` already contains a saved token, setup offers it as the default. If no saved token exists, setup prefills the first supported alias (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_KEY`, `TELEGRAM_TOKEN`, or `TELEGRAM_KEY`) as an environment reference such as `$TELEGRAM_BOT_TOKEN`, validates the resolved value, and persists the reference instead of copying the secret. Bot/session identity persists under `profiles.default`; shared handlers and assistant/voice/time settings remain top-level. `/telegram setup default` and `/telegram connect default` are exact aliases for the bare commands. Use `/telegram setup <name>` only when you want an additional bot profile. Cancelling or failing named-profile token validation leaves the currently active profile and polling runtime unchanged; setup reports the profile as saved and connected only after polling startup succeeds.
 
 ### 3. Connect this Pi instance and its active session
 
 ```bash
-/telegram-connect
+/telegram connect
 ```
 
-The connected Pi instance owns Telegram polling. Use `/telegram-connect <profile>` to activate a named profile, and optionally append `as=Name` to name a fresh Workspace Thread. Each profile is a parallel bot runtime with isolated polling, diagnostics, Threaded Mode state, and local bus transport; the `default` profile keeps unsuffixed runtime paths. In classic mode each profile uses a singleton lock. When Telegram private-chat Threaded Mode is available, one live instance becomes the profile's leader and later visible Pi instances register as followers. Reopening or resuming the same Pi session restores its remembered Thread at session startup; a distinct session in the same directory has its own binding and still requires explicit `/telegram-connect` when no remembered binding exists.
+The connected Pi instance owns Telegram polling. Use `/telegram connect <profile>` to activate a named profile, and optionally append `as=Name` to name a fresh Workspace Thread. Each profile is a parallel bot runtime with isolated polling, diagnostics, Threaded Mode state, and local bus transport; the `default` profile keeps unsuffixed runtime paths. In classic mode each profile uses a singleton lock. When Telegram private-chat Threaded Mode is available, one live instance becomes the profile's leader and later visible Pi instances register as followers. Reopening or resuming the same Pi session restores its remembered Thread at session startup; a distinct session in the same directory has its own binding and still requires explicit `/telegram connect` when no remembered binding exists.
 
-After an unclean computer shutdown, `/telegram-connect` detects truncated or structurally invalid temporary ownership/routing files, quarantines only the damaged files under `tmp/telegram/recovery/`, and retries once. A journal snapshot removed by older broad temp cleanup is rebuilt when its complete segment history proves an empty result, while a revisionless snapshot is repaired from the first surviving segment's exact predecessor when the reconstructed tail validates. Otherwise the snapshot and segments are quarantined as recovery evidence, a fresh journal is published, and startup continues with an informational diagnostic instead of requiring manual JSON repair. Unsupported journal versions block recovery without rewriting or quarantining the retained files; use a compatible runtime rather than deleting journals. Saved `telegram.json` configuration and runtime diagnostics remain intact. Recovery never replaces a verifiable live owner; if safe automatic recovery cannot complete, the command gives one explicit Pi-restart instruction instead of requiring deletion of the whole `tmp/` directory.
+After an unclean computer shutdown, `/telegram connect` detects truncated or structurally invalid temporary ownership/routing files, quarantines only the damaged files under `tmp/telegram/recovery/`, and retries once. A journal snapshot removed by older broad temp cleanup is rebuilt when its complete segment history proves an empty result, while a revisionless snapshot is repaired from the first surviving segment's exact predecessor when the reconstructed tail validates. Otherwise the snapshot and segments are quarantined as recovery evidence, a fresh journal is published, and startup continues with an informational diagnostic instead of requiring manual JSON repair. Unsupported journal versions block recovery without rewriting or quarantining the retained files; use a compatible runtime rather than deleting journals. Saved `telegram.json` configuration and runtime diagnostics remain intact. Recovery never replaces a verifiable live owner; if safe automatic recovery cannot complete, the command gives one explicit Pi-restart instruction instead of requiring deletion of the whole `tmp/` directory.
 
-Persistent competing `getUpdates` clients cause a bounded transport stand-down rather than endless retries. Accepted local work remains queued/executable, but Telegram delivery stops. Inspect `/telegram-status --debug`, stop the competing client, then reconnect. See [Runtime Ownership](./docs/architecture.md#runtime-ownership).
+Persistent competing `getUpdates` clients cause a bounded transport stand-down rather than endless retries. Accepted local work remains queued/executable, but Telegram delivery stops. Inspect `/telegram status --debug`, stop the competing client, then reconnect. See [Runtime Ownership](./docs/architecture.md#runtime-ownership).
 
 ### 4. Pair your Telegram account
 
@@ -139,7 +139,7 @@ Enable the optional capabilities the bridge needs in the [@BotFather](https://t.
 | Threaded Mode | Run one leader plus visible follower Pi instances through named private-chat threads. | One bot can host a local multi-instance Pi organism without hidden process spawning. |
 | Reroute and restore | Give unknown and command-created temporary threads explicit forward and replace/restore choices. | Forward removes the temporary tab; restore rebinds it and removes only the replaced old tab, so Telegram client state repairs without orphan controls. |
 | Extension sections | Add menu sections, commands, status rows, settings, callbacks, and delivery helpers from companion extensions. | `pi-telegram` becomes a platform surface for other Pi extensions. |
-| Runtime diagnostics | Use `/telegram-status` and recent runtime events for connection, role, negotiated bus protocol/build/capabilities, separate polling and inbound-worker progress, journal depth, local/foreign queue ownership, automatic retry waits, transport, and failures. | Compatible build skew, foreign semantic authority, a healthy poller, durable backoff and an infrastructure-blocked worker remain distinguishable without hidden logs. |
+| Runtime diagnostics | Use `/telegram status` and recent runtime events for connection, role, negotiated bus protocol/build/capabilities, separate polling and inbound-worker progress, journal depth, local/foreign queue ownership, automatic retry waits, transport, and failures. | Compatible build skew, foreign semantic authority, a healthy poller, durable backoff and an infrastructure-blocked worker remain distinguishable without hidden logs. |
 | Safety and ownership | Pair one owner, lock transport, scope targets, and reject fake terminal behavior. | Remote access remains explicit, bounded, and understandable. |
 
 ## Core Loop
@@ -180,13 +180,13 @@ Run these inside Pi.
 
 | Command | Purpose |
 | --- | --- |
-| `/telegram-setup` / `/telegram-setup default` | Save or update `profiles.default` |
-| `/telegram-setup <profile>` | Save or update a named-profile bot token |
-| `/telegram-connect` / `/telegram-connect default` | Activate `profiles.default` and acquire its transport ownership |
-| `/telegram-connect <profile>` | Activate a named profile and acquire its transport ownership |
-| `/telegram-connect [profile] as=Name` | Give a fresh Workspace Thread one unique capitalized Latin-word identity while connecting |
-| `/telegram-disconnect` | Confirm, then stop polling, release ownership, and delete this instance's Threaded Mode tab; graceful Pi quit always preserves restart ownership and independently deletes the tab only when automatic cleanup is enabled |
-| `/telegram-status` | Inspect connection, mode, separate polling/worker progress, journal depth, queue, transport, automatic retry state, and recent diagnostics |
+| `/telegram setup` / `/telegram setup default` | Save or update `profiles.default` |
+| `/telegram setup <profile>` | Save or update a named-profile bot token |
+| `/telegram connect` / `/telegram connect default` | Activate `profiles.default` and acquire its transport ownership |
+| `/telegram connect <profile>` | Activate a named profile and acquire its transport ownership |
+| `/telegram connect [profile] as=Name` | Give a fresh Workspace Thread one unique capitalized Latin-word identity while connecting |
+| `/telegram disconnect` | Confirm, then stop polling, release ownership, and delete this instance's Threaded Mode tab; graceful Pi quit always preserves restart ownership and independently deletes the tab only when automatic cleanup is enabled |
+| `/telegram status` | Inspect connection, mode, separate polling/worker progress, journal depth, queue, transport, automatic retry state, and recent diagnostics |
 | `/projects` | Browse every Pi working directory (project) and its sessions, then switch the active session |
 | `/sessions` | Browse and switch sessions in the current project |
 | `/open <path\|id>` | Switch directly to a session JSONL path or session id |
@@ -298,7 +298,7 @@ Durable inbound admission is a **process-crash recovery** guarantee. Atomic priv
 
 Telegram is a companion surface around a live Pi runtime, not a second runtime. It can compact the current session and browse or switch saved sessions (`/projects`, `/sessions`, `/open`), but it cannot resume through other entry points, fork, navigate the session tree, or clear the TUI transcript until Pi exposes safe public extension APIs for those operations.
 
-An optional external daemon (`pi-telegram-daemon`) can own Telegram transport for a bot profile and supervise managed `pi --mode rpc` workers plus attached terminal Pi instances. It is a separate process and an explicit operator choice; without it the companion runs exactly as above. From Pi, `/telegram-daemon start` installs login autostart and starts it, and `/telegram-daemon stop|status` stops or inspects it. See [Control Plane](./docs/control-plane.md).
+An optional external daemon (`pi-telegram-daemon`) can own Telegram transport for a bot profile and supervise managed `pi --mode rpc` workers plus attached terminal Pi instances. It is a separate process and an explicit operator choice; without it the companion runs exactly as above. From Pi, `/telegram daemon start` installs login autostart and starts it, and `/telegram daemon stop|status` stops or inspects it. See [Control Plane](./docs/control-plane.md).
 
 A Telegram prompt is a normal model turn in the active Pi session and therefore inherits that session's active post-compaction context; the bridge does not make token cost proportional only to the new mobile message. The bundled `telegram-bridge` Skill owns general agent operation; `show-me` turns current work and system behavior into truthful phone-width Markdown or focused browser-ready HTML while remaining useful in the terminal; `generated-control-surface` proactively compiles optional evidence-backed ephemeral controls when model interpretation remains useful; and `generative-apps` compiles stable repeated interaction into reviewed reusable applications whose bound buttons bypass model inference while ordinary prompt buttons retain it. Generative Apps may own a closed state machine or adapt another authoritative tool, service, Actor Run, or application through bounded methods. Disconnecting removes pi-telegram's delivery tools and transient routing guidance from later requests until direct ownership or follower registration returns, without changing other active Pi tools. Pi session JSONL contains model history; profile-scoped pi-telegram `logs*.jsonl` contains redacted operational events and is never model context.
 

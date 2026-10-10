@@ -48,7 +48,7 @@ const DEFAULT_VOICE_TIMEOUT_MS = 120_000;
 // --- Types ---
 
 /**
- * Record a runtime event that appears in `/telegram-status`.
+ * Record a runtime event that appears in `/telegram status`.
  * Voice synthesis provider extensions can call this to surface diagnostics
  * alongside pi-telegram's own events. Events are silently dropped
  * when pi-telegram is not loaded.

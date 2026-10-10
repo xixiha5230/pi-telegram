@@ -11,7 +11,7 @@ Small standard for inline buttons, menu rows, state controls, cards, and confirm
 - Put emoji where they help scanning, not everywhere.
 - Use one strong indicator for current selection; avoid emoji noise on every option.
 - Match label casing to control role.
-- Keep Telegram bot commands such as `/start` and `/abort` as plain text so clients expose their native command links; bot command names use Telegram-compatible characters and never hyphens. Render Pi TUI commands mentioned inside Telegram HTML, such as `<code>/telegram-connect</code>`, as code so Telegram does not mis-tokenize their hyphenated names; callback alerts remain plain because Telegram does not support rich formatting there.
+- Keep Telegram bot commands such as `/start` and `/abort` as plain text so clients expose their native command links; bot command names use Telegram-compatible characters and never hyphens. Render Pi TUI commands mentioned inside Telegram HTML, such as `<code>/telegram connect</code>`, as code so Telegram does not mis-tokenize their hyphenated names; callback alerts remain plain because Telegram does not support rich formatting there.
 - Prefer minimal, clear configuration UI over exhaustive explanation.
 - Preserve domain-owned callback prefixes and behavior in the owning module.
 

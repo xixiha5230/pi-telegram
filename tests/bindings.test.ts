@@ -69,6 +69,23 @@ function createBindingApiHarness() {
   return { api, handlers, tools, commands, messages };
 }
 
+
+type RegisteredBindingCommand = {
+  handler: (args: string, ctx: unknown) => Promise<unknown> | unknown;
+};
+
+/** Resolve the merged `/telegram <sub>` command as the former top-level command. */
+function getTelegramSubcommand(
+  commands: Map<string, unknown>,
+  sub: string,
+): RegisteredBindingCommand | undefined {
+  const root = commands.get("telegram") as RegisteredBindingCommand | undefined;
+  if (!root) return undefined;
+  return {
+    handler: (args, ctx) => root.handler(args ? `${sub} ${args}` : sub, ctx),
+  };
+}
+
 test("Generative App live-surface binding shuts down and clears session authority", () => {
   const binding = createTelegramGenerativeAppLiveSurfaceBinding();
   let shutdowns = 0;
@@ -956,7 +973,7 @@ test("Command binding scopes a requested Thread name to one polling start", asyn
     updateStatus: () => {},
     recordRuntimeEvent: () => {},
   } as unknown as Parameters<typeof registerTelegramCommandsAndTools>[0]);
-  const connect = harness.commands.get("telegram-connect") as {
+  const connect = getTelegramSubcommand(harness.commands, "connect") as {
     handler: (args: string, ctx: ExtensionContext) => Promise<void>;
   };
 
@@ -1017,7 +1034,7 @@ test("Command binding rejects a missing profile without stopping active polling"
     },
     recordRuntimeEvent: () => {},
   } as unknown as Parameters<typeof registerTelegramCommandsAndTools>[0]);
-  const connect = harness.commands.get("telegram-connect") as {
+  const connect = getTelegramSubcommand(harness.commands, "connect") as {
     handler: (args: string, ctx: ExtensionContext) => Promise<void>;
   };
   const notifications: string[] = [];
@@ -1086,7 +1103,7 @@ test("Named profile connect completes old teardown before activating new identit
     recordRuntimeEvent: () => {},
   } as unknown as Parameters<typeof registerTelegramCommandsAndTools>[0]);
 
-  const connect = harness.commands.get("telegram-connect") as {
+  const connect = getTelegramSubcommand(harness.commands, "connect") as {
     handler: (args: string, ctx: ExtensionContext) => Promise<void>;
   };
   await connect.handler("work", {
@@ -1173,7 +1190,7 @@ test("Named profile setup cancellation preserves the active runtime", async () =
     },
     recordRuntimeEvent: () => {},
   } as unknown as Parameters<typeof registerTelegramCommandsAndTools>[0]);
-  const setupCommand = harness.commands.get("telegram-setup") as {
+  const setupCommand = getTelegramSubcommand(harness.commands, "setup") as {
     handler: (args: string, ctx: ExtensionContext) => Promise<void>;
   };
   const notifications: string[] = [];
@@ -1214,7 +1231,7 @@ test("Named setup preserves a display preference changed while the token form wa
     getDefaultChatId: () => 7, canSendDirect: () => true, updateStatus() {}, recordRuntimeEvent() {},
   } as unknown as Parameters<typeof registerTelegramCommandsAndTools>[0]);
   try {
-    const setupCommand = harness.commands.get("telegram-setup") as {
+    const setupCommand = getTelegramSubcommand(harness.commands, "setup") as {
       handler(args: string, ctx: ExtensionContext): Promise<void>;
     };
     await setupCommand.handler("work", {

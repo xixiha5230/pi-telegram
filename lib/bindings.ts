@@ -567,7 +567,7 @@ export interface TelegramCommandsAndToolsBindingDeps {
     threadName: string | undefined,
   ) => void;
   validateThreadName?: Commands.TelegramBridgeCommandRegistrationDeps["validateThreadName"];
-  /** External daemon lifecycle for `/telegram-daemon`; absent when unavailable. */
+  /** External daemon lifecycle for `/telegram daemon`; absent when unavailable. */
   daemonLifecycle?: Commands.TelegramBridgeCommandRegistrationDeps["daemonLifecycle"];
   setClusterLeaderMode?: Commands.TelegramBridgeCommandRegistrationDeps["setClusterLeaderMode"];
   onTransportChanged?: () => Promise<void> | void;

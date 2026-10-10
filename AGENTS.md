@@ -17,7 +17,7 @@ A Telegram-first control plane for Pi. You operate it from a phone.
 - **Managed workers are daemon-spawned `pi --mode rpc`.** They run the same bridge
   extension a terminal Pi runs, so every Telegram surface — commands, menus, model and
   thinking pickers, streaming previews, queue controls, voice, rendering, callback
-  namespaces — stays exactly one implementation. The daemon presses `/telegram-connect`
+  namespaces — stays exactly one implementation. The daemon presses `/telegram connect`
   for the operator; the operator never opens a terminal.
 - **The `/daemon` panel is the control surface.** It never closes itself, every nested
   layer offers the way back, lifecycle actions re-render in place, and only an explicit

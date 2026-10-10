@@ -83,11 +83,7 @@ test("Extension entrypoint wires domain bindings into the pi API", () => {
     [...harness.commands.keys()],
     [
       "telegram-internal",
-      "telegram-setup",
-      "telegram-status",
-      "telegram-daemon",
-      "telegram-connect",
-      "telegram-disconnect",
+      "telegram",
       "projects",
       "sessions",
       "open",

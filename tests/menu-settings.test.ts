@@ -240,7 +240,7 @@ test("Settings detail markups show active values", () => {
   assert.match(cleanupText, /<code>on<\/code>/);
   assert.match(
     cleanupText,
-    /manual <code>\/telegram-disconnect<\/code> still confirms/,
+    /manual <code>\/telegram disconnect<\/code> still confirms/,
   );
   assert.match(cleanupText, /Review never deletes tabs\./);
   assert.equal(

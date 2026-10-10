@@ -1404,7 +1404,7 @@ function buildTelegramBridgeCompactStatusLines(
     "diagnostics:",
     `- state: ${diagnosticsPaths.state}`,
     `- logs: ${diagnosticsPaths.logs}`,
-    "- full dump: /telegram-status --debug",
+    "- full dump: /telegram status --debug",
   ];
 }
 

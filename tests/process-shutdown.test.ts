@@ -505,11 +505,11 @@ test("Direct Telegram tools refuse delivery from a non-owner process", async () 
     assert.equal(result.code, 0, result.stderr);
     assert.match(
       result.stdout,
-      /telegram_message:\nTelegram direct delivery requires this Pi instance to own \/telegram-connect/,
+      /telegram_message:\nTelegram direct delivery requires this Pi instance to own \/telegram connect/,
     );
     assert.match(
       result.stdout,
-      /telegram_attach:\nTelegram direct delivery requires this Pi instance to own \/telegram-connect/,
+      /telegram_attach:\nTelegram direct delivery requires this Pi instance to own \/telegram connect/,
     );
     await assert.rejects(() => readFile(markerPath, "utf8"), {
       code: "ENOENT",

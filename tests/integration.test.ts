@@ -332,6 +332,19 @@ async function getRuntimeTelegramExtension(): Promise<RuntimeTelegramExtension> 
   return runtimeTelegramExtension;
 }
 
+
+/** Resolve the merged `/telegram <sub>` command as the former top-level command. */
+function telegramSubcommand(
+  commands: Map<string, { handler: (args: string, ctx: unknown) => Promise<void> }>,
+  sub: string,
+): { handler: (args: string, ctx: unknown) => Promise<void> } | undefined {
+  const root = commands.get("telegram");
+  if (!root) return undefined;
+  return {
+    handler: (args, ctx) => root.handler(args ? `${sub} ${args}` : sub, ctx),
+  };
+}
+
 test("Cross-instance agent turns route in both leader and follower directions", async () => {
   const followerRegistry = Bus.createTelegramBusFollowerRegistry();
   followerRegistry.register({
@@ -1065,7 +1078,7 @@ test("v0.27.12 artifacts and graceful tab cleanup preserve same-directory auto-c
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext({ cwd: "/repo/graceful-leader" });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(
       () => methods.some((entry) => entry.method === "createForumTopic"),
       10_000,
@@ -1283,7 +1296,7 @@ test("Public activity delivery reaches the classic instance without blocking age
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     unregisterActivity = registerTelegramActivityHandler({
       id: "integration-classic-activity",
       handle: async (event, activityCtx) => {
@@ -1380,7 +1393,7 @@ test("Verbose activity reaches classic transport before the final assistant answ
       cwd: "/repo/verbose-classic",
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await handlers.get("input")?.(
       { source: "interactive", text: "verbose probe" },
       ctx,
@@ -1514,7 +1527,7 @@ test("Verbose activity reaches classic transport before the final assistant answ
     assert.match(editedRich, /result/);
     assert.equal(calls[toolEditIndex]?.body.text, undefined);
     await handlers.get("agent_settled")?.({}, ctx);
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     await handlers.get("session_shutdown")?.({}, ctx);
   } finally {
     restoreFetch();
@@ -1788,7 +1801,7 @@ test("Extension runtime polls, pairs, and dispatches an inbound Telegram turn in
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     const dispatchedContent = await dispatched;
     await flushMicrotasks();
     assert.equal(sentMessages.length, 1);
@@ -3126,7 +3139,7 @@ test("Extension startup preserves queued authority owned by another process", as
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext({ cwd: "/repo/journal-recovery" });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await flushMicrotasks();
     await waitForTimeout(20);
 
@@ -3235,7 +3248,7 @@ test("Extension runtime coalesces a cross-batch forward comment into one Pi turn
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     const dispatchedContent = await dispatched;
     assert.equal(sentMessages.length, 1);
     const promptBlock = getRuntimeHarnessTextBlock(dispatchedContent);
@@ -3344,7 +3357,7 @@ test("Extension runtime fences queued final and preview after polling ownership 
     extension(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await dispatched;
     await handlers.get("agent_start")?.({}, ctx);
     await writeRuntimeTelegramLocks({
@@ -3583,7 +3596,7 @@ test(`Extension runtime preserves accepted work and fences delivery after ${loss
     await writeRuntimeTelegramLocks({});
     (await getRuntimeTelegramExtension())(pi);
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() => sentMessages.length === 1);
     assert.match(
       getRuntimeHarnessMessageText(sentMessages[0] as RuntimeHarnessMessage),
@@ -3686,7 +3699,7 @@ test("Extension runtime ignores the retired proactive opt-out while Telegram is 
     });
     await handlers.get("session_start")?.({}, ctx);
     assert.deepEqual(getActiveTools(), ["read", "foreign_tool"]);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     assert.deepEqual(getActiveTools(), [
       "read",
       "foreign_tool",
@@ -3744,7 +3757,7 @@ test("Extension runtime ignores the retired proactive opt-out while Telegram is 
       { type: "agent_end", messages: [assistantMessage] },
       ctx,
     );
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     assert.deepEqual(getActiveTools(), ["read", "foreign_tool"]);
     assert.deepEqual(
       await handlers.get("before_agent_start")?.(
@@ -3789,14 +3802,14 @@ strictFileTest("Channel post tool does not resend lost success or outcome across
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext({ cwd: "/repo/channel-replacement" });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     const tool = tools.get("telegram_message");
     assert.ok(tool);
     await tool.execute("stable-channel-operation", {
       text: "Channel post", chat_id: -100123, channel: true,
     });
-    await commands.get("telegram-disconnect")?.handler("", ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await tool.execute("stable-channel-operation", {
       text: "Channel post", chat_id: -100123, channel: true,
     });
@@ -3804,13 +3817,13 @@ strictFileTest("Channel post tool does not resend lost success or outcome across
     await assert.rejects(tool.execute("ambiguous-channel-operation", {
       text: "Ambiguous", chat_id: -100123, channel: true,
     }), /channel publication failed/u);
-    await commands.get("telegram-disconnect")?.handler("", ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await assert.rejects(tool.execute("ambiguous-channel-operation", {
       text: "Ambiguous", chat_id: -100123, channel: true,
     }), /channel publication failed/u);
     assert.equal(sends, 2);
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     await handlers.get("session_shutdown")?.({}, ctx);
   } finally {
     restoreFetch();
@@ -3858,7 +3871,7 @@ strictFileTest("Channel media tool publishes one local upload and edits its capt
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext({ cwd: "/repo/channel-media" });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     const messageTool = tools.get("telegram_message");
     const mutationTool = tools.get("telegram_channel_post");
     const listTool = tools.get("telegram_channel_posts");
@@ -3897,7 +3910,7 @@ strictFileTest("Channel media tool publishes one local upload and edits its capt
     assert.equal(calls[1]?.caption, "<tg-spoiler>Hidden</tg-spoiler> update");
     assert.equal(calls[2]?.caption, "Clip");
     assert.equal(calls[2]?.mediaPresent, true);
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     await handlers.get("session_shutdown")?.({}, ctx);
   } finally {
     restoreFetch();
@@ -4043,7 +4056,7 @@ test("Extension runtime sends proactive checkpoints and final once in source ord
       cwd: "/repo/proactive-owner",
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await flushMicrotasks(20);
     await handlers.get("input")?.(
       { source: "interactive", text: "local request" },
@@ -4148,7 +4161,7 @@ test("Extension runtime sends proactive checkpoints and final once in source ord
       sentMarkdown.some((text) => text.includes("private reasoning")),
       false,
     );
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     await handlers.get("session_shutdown")?.({}, ctx);
   } finally {
     restoreFetch();
@@ -4404,7 +4417,7 @@ test(`Extension runtime delivers anchored Telegram commentary once before final 
       isIdle: () => false,
     });
     await handlers.get("session_start")?.({}, idleCtx);
-    await commands.get("telegram-connect")?.handler("", idleCtx);
+    await telegramSubcommand(commands, "connect")?.handler("", idleCtx);
     await waitForCondition(() => dispatched);
     assert.match(
       getRuntimeHarnessTextBlock(sentMessages[0]).text ?? "",
@@ -4562,7 +4575,7 @@ test("Extension runtime clears queued follow-ups after a Telegram stop", async (
       },
     });
     await handlers.get("session_start")?.({}, idleCtx);
-    await commands.get("telegram-connect")?.handler("", idleCtx);
+    await telegramSubcommand(commands, "connect")?.handler("", idleCtx);
     await waitForCondition(() => firstDispatchResolved);
     await handlers.get("agent_start")?.({}, activeCtx);
     secondUpdates.resolve(
@@ -4718,7 +4731,7 @@ test("Extension runtime handles immediate status before queued prompt after agen
     };
     shutdownCtx = idleCtx;
     await handlers.get("session_start")?.({}, idleCtx);
-    await commands.get("telegram-connect")?.handler("", idleCtx);
+    await telegramSubcommand(commands, "connect")?.handler("", idleCtx);
     await waitForCondition(() => firstDispatchResolved);
     await handlers.get("agent_start")?.({}, activeCtx);
     secondUpdates.resolve(
@@ -4857,7 +4870,7 @@ test("Extension runtime opens immediate model menu before queued prompt after ag
       isIdle: () => false,
     };
     await handlers.get("session_start")?.({}, idleCtx);
-    await commands.get("telegram-connect")?.handler("", idleCtx);
+    await telegramSubcommand(commands, "connect")?.handler("", idleCtx);
     await waitForCondition(() => firstDispatchResolved);
     await handlers.get("agent_start")?.({}, activeCtx);
     secondUpdates.resolve(
@@ -5003,7 +5016,7 @@ test("Extension runtime keeps queued turns blocked until compaction settles", as
       },
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() =>
       runtimeEvents.includes("send:<b>Compact session?</b>"),
     );
@@ -5111,7 +5124,7 @@ test("Extension runtime compaction notices cannot overtake a pending local final
     await writeRuntimeTelegramLocks({});
     (await getRuntimeTelegramExtension())(pi);
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await flushMicrotasks(20);
     await handlers.get("input")?.({ source: "interactive", text: "local request" }, ctx);
     await handlers.get("agent_start")?.({}, ctx);
@@ -5144,7 +5157,7 @@ test("Extension runtime compaction notices cannot overtake a pending local final
   } finally {
     releaseFinal();
     await settled;
-    await commands.get("telegram-disconnect")?.handler("", ctx);
+    await telegramSubcommand(commands, "disconnect")?.handler("", ctx);
     await handlers.get("session_shutdown")?.({}, ctx);
     restoreFetch();
     await telegramConfig.restore();
@@ -5216,7 +5229,7 @@ test(`Extension runtime delivers the final answer before observed auto-compactio
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await firstDispatched;
     await handlers.get("agent_start")?.({}, ctx);
     secondUpdates.resolve(
@@ -5386,7 +5399,7 @@ test("Extension runtime coalesces media-group updates into one delayed dispatch"
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForEventLoopCondition(() => getUpdatesCalls >= 2, 5000);
     assert.equal(runtimeEvents.length, 0);
     await waitForCondition(() => runtimeEvents.length === 1, 3000);
@@ -5454,7 +5467,7 @@ test("Extension runtime coalesces likely split long text updates into one dispat
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForEventLoopCondition(() => getUpdatesCalls >= 1, 5000);
     await flushMicrotasks();
     assert.equal(runtimeEvents.length, 0);
@@ -5513,7 +5526,7 @@ test("Extension runtime clears pending split-text dispatch on shutdown", async (
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForEventLoopCondition(() => getUpdatesCalls >= 2, 5000);
     await handlers.get("session_shutdown")?.({}, ctx);
     await new Promise((resolve) => setTimeout(resolve, 900));
@@ -5568,7 +5581,7 @@ test("Extension runtime clears pending media-group dispatch on shutdown", async 
     (await getRuntimeTelegramExtension())(pi);
     const ctx = createRuntimeExtensionContext();
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForEventLoopCondition(() => getUpdatesCalls >= 2, 5000);
     await handlers.get("session_shutdown")?.({}, ctx);
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -5638,7 +5651,7 @@ test("Extension runtime applies reaction priority and removal before the next di
       isIdle: () => false,
     });
     await handlers.get("session_start")?.({}, idleCtx);
-    await commands.get("telegram-connect")?.handler("", idleCtx);
+    await telegramSubcommand(commands, "connect")?.handler("", idleCtx);
     await waitForCondition(() => firstDispatchResolved);
     await handlers.get("agent_start")?.({}, activeCtx);
     secondUpdates.resolve(
@@ -5829,7 +5842,7 @@ test("Extension runtime applies idle model picks immediately and refreshes statu
     });
     shutdownCtx = ctx;
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() =>
       runtimeEvents.some((event) => event === "send:<b>🤖 Choose a model:</b>"),
     );
@@ -5954,7 +5967,7 @@ test("Extension runtime switches model in flight and dispatches a continuation t
       },
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() =>
       runtimeEvents.some((event) => event === "send:<b>🤖 Choose a model:</b>"),
     );
@@ -6122,7 +6135,7 @@ test("Extension runtime preserves long-session queue through abort, next, and mo
       },
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() =>
       runtimeEvents.includes("send:<b>🤖 Choose a model:</b>"),
     );
@@ -6344,7 +6357,7 @@ test("Extension runtime delays model-switch abort until the active tool finishes
       },
     });
     await handlers.get("session_start")?.({}, ctx);
-    await commands.get("telegram-connect")?.handler("", ctx);
+    await telegramSubcommand(commands, "connect")?.handler("", ctx);
     await waitForCondition(() =>
       runtimeEvents.some((event) => event === "send:<b>🤖 Choose a model:</b>"),
     );

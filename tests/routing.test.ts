@@ -1526,7 +1526,7 @@ test("Routing runtime preserves active follower topics when the follower is not 
     assert.deepEqual(telegramQueueStore.getQueuedItems(), []);
     assert.equal(
       events.includes(
-        "reply:Instance Beacon is not currently registered with the Telegram bus. This thread is preserved; retry shortly. If it does not recover, run <code>/telegram-connect</code> in that Pi instance.",
+        "reply:Instance Beacon is not currently registered with the Telegram bus. This thread is preserved; retry shortly. If it does not recover, run <code>/telegram connect</code> in that Pi instance.",
       ),
       true,
     );

@@ -140,7 +140,7 @@ Priority for outbound voice delivery is: configured `outboundHandlers` with `typ
 
 ### Surfacing provider diagnostics
 
-Voice provider extensions can record runtime events that appear in `/telegram-status` alongside pi-telegram's own events:
+Voice provider extensions can record runtime events that appear in `/telegram status` alongside pi-telegram's own events:
 
 ```typescript
 import { recordTelegramRuntimeEvent } from "@llblab/pi-telegram/outbound";
@@ -151,7 +151,7 @@ recordTelegramRuntimeEvent("voice-provider", new Error("TTS failed"), {
 });
 ```
 
-`recordTelegramRuntimeEvent` writes to the same event ring that pi-telegram uses. Events are visible via `/telegram-status` in Telegram. Calls are silently dropped if pi-telegram is not loaded.
+`recordTelegramRuntimeEvent` writes to the same event ring that pi-telegram uses. Events are visible via `/telegram status` in Telegram. Calls are silently dropped if pi-telegram is not loaded.
 
 ## Voice Extension Section
 

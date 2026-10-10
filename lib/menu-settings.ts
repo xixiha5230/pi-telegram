@@ -204,7 +204,7 @@ export function buildAutomaticThreadCleanupSettingsText(
     "Delete this Pi instance's Telegram tab when Pi quits normally.",
     "",
     "<code>-</code> <code>on</code> (default): delete the bound thread and release Telegram authority on graceful quit.",
-    "<code>-</code> <code>off</code>: preserve the tab as a restart hint; manual <code>/telegram-disconnect</code> still confirms and deletes it.",
+    "<code>-</code> <code>off</code>: preserve the tab as a restart hint; manual <code>/telegram disconnect</code> still confirms and deletes it.",
     "",
     "Review inactive tabs checks current owner and work evidence. Review never deletes tabs.",
   ].join("\n");

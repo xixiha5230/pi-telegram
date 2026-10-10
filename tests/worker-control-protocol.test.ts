@@ -42,7 +42,7 @@ test("Worker control parser rejects shell-like and malformed commands", () => {
   assert.equal(parseTelegramWorkerControlCommand({ type: "bash", command: "rm -rf /" }), undefined);
   assert.equal(parseTelegramWorkerControlCommand({ type: "prompt", message: "" }), undefined);
   assert.equal(parseTelegramWorkerControlCommand({ type: "prompt", message: "/bash ls" }), undefined);
-  assert.equal(parseTelegramWorkerControlCommand({ type: "steer", message: " /telegram-connect" }), undefined);
+  assert.equal(parseTelegramWorkerControlCommand({ type: "steer", message: " /telegram connect" }), undefined);
   assert.equal(parseTelegramWorkerControlCommand({ type: "switch_session", sessionPath: "relative.jsonl" }), undefined);
   assert.equal(parseTelegramWorkerControlCommand({ type: "set_model", provider: "p" }), undefined);
   assert.equal(

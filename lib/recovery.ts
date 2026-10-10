@@ -396,7 +396,7 @@ export function recoverTelegramRuntimeState(
   );
 }
 
-/** Build the `/telegram-connect` recovery boundary around runtime artifacts. */
+/** Build the `/telegram connect` recovery boundary around runtime artifacts. */
 export function createTelegramPollingStartRecoveryHandler(
   deps: TelegramPollingStartRecoveryHandlerDeps,
 ): () => Promise<TelegramPollingStartRecoveryDecision> {
@@ -411,7 +411,7 @@ export function createTelegramPollingStartRecoveryHandler(
     if (classification.kind === "blocked-live-owner") {
       return {
         kind: "blocked",
-        message: `Telegram temporary state is damaged, but owner process ${classification.livePids.join(", ")} is still live. Restart that Pi instance, then run /telegram-connect again.`,
+        message: `Telegram temporary state is damaged, but owner process ${classification.livePids.join(", ")} is still live. Restart that Pi instance, then run /telegram connect again.`,
       };
     }
 
@@ -424,7 +424,7 @@ export function createTelegramPollingStartRecoveryHandler(
       return {
         kind: "blocked",
         message:
-          "Telegram polling could not stop safely, so temporary state was not reset. Restart this Pi instance and run /telegram-connect again.",
+          "Telegram polling could not stop safely, so temporary state was not reset. Restart this Pi instance and run /telegram connect again.",
       };
     }
     try {
@@ -442,7 +442,7 @@ export function createTelegramPollingStartRecoveryHandler(
       if (recovery.kind === "blocked-live-owner") {
         return {
           kind: "blocked",
-          message: `Telegram temporary state changed during recovery and is now protected by owner process ${recovery.livePids.join(", ")}. Restart that Pi instance, then run /telegram-connect again.`,
+          message: `Telegram temporary state changed during recovery and is now protected by owner process ${recovery.livePids.join(", ")}. Restart that Pi instance, then run /telegram connect again.`,
         };
       }
       return {
@@ -457,7 +457,7 @@ export function createTelegramPollingStartRecoveryHandler(
       return {
         kind: "blocked",
         message:
-          "Telegram temporary-state recovery failed. Restart this Pi instance and run /telegram-connect again.",
+          "Telegram temporary-state recovery failed. Restart this Pi instance and run /telegram connect again.",
       };
     }
   };

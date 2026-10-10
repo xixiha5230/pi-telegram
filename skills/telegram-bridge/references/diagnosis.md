@@ -4,8 +4,8 @@ Read this reference only when diagnosing Telegram bridge health or delivery fail
 
 Inspect in this order:
 
-1. `/telegram-status` for compact health in the Pi TUI.
-2. `/telegram-status --debug` for bounded human-readable diagnostics in the Pi TUI.
+1. `/telegram status` for compact health in the Pi TUI.
+2. `/telegram status --debug` for bounded human-readable diagnostics in the Pi TUI.
 3. `~/.pi/agent/tmp/telegram/state.json` and `logs.jsonl` for default-profile redacted evidence.
 4. `state.<profile>.json` and `logs.<profile>.jsonl` for a named profile.
 

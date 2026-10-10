@@ -113,6 +113,18 @@ function createBridgeCommandContext(
   } as unknown as ExtensionCommandContext;
 }
 
+
+/** Resolve the merged `/telegram <sub>` command as the former top-level command. */
+function getTelegramSubcommand(
+  commands: Map<string, RegisteredBridgeCommand>,
+  sub: string,
+): RegisteredBridgeCommand {
+  const root = getRequiredCommand(commands, "telegram");
+  return {
+    handler: (args, ctx) => root.handler(args ? `${sub} ${args}` : sub, ctx),
+  };
+}
+
 test("Thread display-name headings escape printable-ASCII markup", () => {
   assert.equal(
     formatTelegramThreadDisplayNameSavedHeading("wasd<&>"),
@@ -134,8 +146,8 @@ test("Command helpers expose Telegram bot command definitions", () => {
   assert.deepEqual(TELEGRAM_COMMAND_EMOJI.thinking, "🧠");
   assert.equal(formatTelegramCommandEmojiPrefix("model"), "🤖 ");
   assert.equal(
-    formatTelegramPiCommandHtml("/telegram-connect <profile>"),
-    "<code>/telegram-connect &lt;profile&gt;</code>",
+    formatTelegramPiCommandHtml("/telegram connect <profile>"),
+    "<code>/telegram connect &lt;profile&gt;</code>",
   );
   for (const command of [
     "new",
@@ -324,7 +336,7 @@ test("Connect reports an unresolved token reference before prompting setup", asy
     stopPolling: async () => {},
     updateStatus: () => {},
   });
-  const connect = getRequiredCommand(harness.commands, "telegram-connect");
+  const connect = getTelegramSubcommand(harness.commands, "connect");
   await connect.handler(
     "",
     createBridgeCommandContext((message) => notifications.push(message)),
@@ -367,7 +379,7 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
       autostartStatus: () => ({ installed: false }),
     },
   });
-  const command = getRequiredCommand(harness.commands, "telegram-daemon");
+  const command = getTelegramSubcommand(harness.commands, "daemon");
   const ctx = createBridgeCommandContext((message) => notifications.push(message));
   await command.handler("start", ctx);
   assert.equal(mode, "daemon");
@@ -379,7 +391,7 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
     "Telegram daemon listening (pid 1); autostart installed.",
     "Telegram daemon stopped. Autostart removed.",
     "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Autostart is not installed.",
-    "Usage: /telegram-daemon start|stop|status",
+    "Usage: /telegram daemon start|stop|status",
   ]);
 });
 
@@ -395,7 +407,7 @@ test("telegram-daemon command reports an unavailable install", async () => {
     stopPolling: async () => {},
     updateStatus: () => {},
   });
-  const command = getRequiredCommand(harness.commands, "telegram-daemon");
+  const command = getTelegramSubcommand(harness.commands, "daemon");
   await command.handler(
     "status",
     createBridgeCommandContext((message) => notifications.push(message)),
@@ -429,8 +441,8 @@ test("Command helpers register pi setup and status commands", async () => {
   const ctx = createBridgeCommandContext((message) => {
     notifications.push(message);
   });
-  await getRequiredCommand(harness.commands, "telegram-setup").handler("", ctx);
-  await getRequiredCommand(harness.commands, "telegram-status").handler(
+  await getTelegramSubcommand(harness.commands, "setup").handler("", ctx);
+  await getTelegramSubcommand(harness.commands, "status").handler(
     "",
     ctx,
   );
@@ -462,7 +474,7 @@ test("Connect requests an optional fresh Workspace Thread name", async () => {
       return true;
     },
   });
-  const connect = getRequiredCommand(harness.commands, "telegram-connect");
+  const connect = getTelegramSubcommand(harness.commands, "connect");
   const ctx = createBridgeCommandContext();
 
   await connect.handler("as=Flightprice", ctx);
@@ -492,7 +504,7 @@ test("Connect rejects an invalid requested Workspace Thread name before startup"
     updateStatus: () => {},
   });
 
-  const connect = getRequiredCommand(harness.commands, "telegram-connect");
+  const connect = getTelegramSubcommand(harness.commands, "connect");
   const ctx = createBridgeCommandContext((message) =>
     notifications.push(message),
   );
@@ -503,7 +515,7 @@ test("Connect rejects an invalid requested Workspace Thread name before startup"
   assert.equal(starts, 0);
   assert.deepEqual(notifications, [
     "Invalid Workspace Thread name.",
-    "Usage: /telegram-connect [profile] as=Flightprice",
+    "Usage: /telegram connect [profile] as=Flightprice",
     "Specify at most one as=Name Workspace Thread name.",
   ]);
 });
@@ -532,8 +544,8 @@ test("Bare and explicit default setup/connect commands select the same profile",
     },
   });
   const ctx = createBridgeCommandContext();
-  const setup = getRequiredCommand(harness.commands, "telegram-setup");
-  const connect = getRequiredCommand(harness.commands, "telegram-connect");
+  const setup = getTelegramSubcommand(harness.commands, "setup");
+  const connect = getTelegramSubcommand(harness.commands, "connect");
 
   await setup.handler("", ctx);
   await setup.handler("default", ctx);
@@ -577,16 +589,16 @@ test("Command helpers register pi connect and disconnect commands", async () => 
     },
   });
   const ctx = createBridgeCommandContext();
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );
   hasToken = true;
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );
-  await getRequiredCommand(harness.commands, "telegram-disconnect").handler(
+  await getTelegramSubcommand(harness.commands, "disconnect").handler(
     "",
     ctx,
   );
@@ -621,10 +633,7 @@ test("Command helpers confirm destructive Threaded Mode disconnects", async () =
       events.push("status");
     },
   });
-  const command = getRequiredCommand(
-    harness.commands,
-    "telegram-disconnect",
-  );
+  const command = getTelegramSubcommand(harness.commands, "disconnect");
   const cancelled = createBridgeCommandContext(
     () => undefined,
     (_title, prompt) => {
@@ -662,10 +671,7 @@ test("Command helpers keep failed disconnects actionable and retryable", async (
       statusUpdates += 1;
     },
   });
-  const command = getRequiredCommand(
-    harness.commands,
-    "telegram-disconnect",
-  );
+  const command = getTelegramSubcommand(harness.commands, "disconnect");
   const ctx = createBridgeCommandContext((message) => {
     notifications.push(message);
   });
@@ -676,8 +682,8 @@ test("Command helpers keep failed disconnects actionable and retryable", async (
   );
   assert.equal(statusUpdates, 1);
   assert.match(notifications[0] ?? "", /Keep this Pi session open/);
-  assert.match(notifications[0] ?? "", /telegram-status --debug/);
-  assert.match(notifications[0] ?? "", /retry \/telegram-disconnect/);
+  assert.match(notifications[0] ?? "", /telegram status --debug/);
+  assert.match(notifications[0] ?? "", /retry \/telegram disconnect/);
 });
 
 test("Connect recovers disposable runtime corruption and retries exactly once", async () => {
@@ -709,7 +715,7 @@ test("Connect recovers disposable runtime corruption and retries exactly once", 
     notifications.push(message);
   });
 
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );
@@ -761,7 +767,7 @@ test("Connect performs filesystem recovery before its one reconnect attempt", as
       notifications.push(message);
     });
 
-    await getRequiredCommand(harness.commands, "telegram-connect").handler(
+    await getTelegramSubcommand(harness.commands, "connect").handler(
       "",
       ctx,
     );
@@ -778,7 +784,7 @@ test("Connect performs filesystem recovery before its one reconnect attempt", as
     assert.match(notifications[0] ?? "", /unclean shutdown/);
     assert.match(notifications[0] ?? "", /bridge connected/);
 
-    await getRequiredCommand(harness.commands, "telegram-connect").handler(
+    await getTelegramSubcommand(harness.commands, "connect").handler(
       "",
       ctx,
     );
@@ -815,7 +821,7 @@ test("Connect converts a failed post-recovery retry into one restart instruction
     notifications.push(message);
   });
 
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );
@@ -843,7 +849,7 @@ test("Connect preserves unrelated startup errors outside the recovery classifier
 
   await assert.rejects(
     async () =>
-      getRequiredCommand(harness.commands, "telegram-connect").handler(
+      getTelegramSubcommand(harness.commands, "connect").handler(
         "",
         createBridgeCommandContext(),
       ),
@@ -875,7 +881,7 @@ test("Connect reports live-owner recovery blockers without retrying", async () =
     notifications.push(message);
   });
 
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );
@@ -915,7 +921,7 @@ test("Command helpers move pi polling ownership after confirmation", async () =>
       return true;
     },
   );
-  await getRequiredCommand(harness.commands, "telegram-connect").handler(
+  await getTelegramSubcommand(harness.commands, "connect").handler(
     "",
     ctx,
   );

@@ -751,7 +751,7 @@ function formatTelegramFollowerRegistrationFailure(message: string): string {
   if (/\b(?:ENOENT|ECONNREFUSED|ETIMEDOUT)\b/u.test(message)) {
     return (
       `live owner / unreachable bus endpoint after bounded retries (${message}); ` +
-      "wait briefly for owner recovery, then retry /telegram-connect. " +
+      "wait briefly for owner recovery, then retry /telegram connect. " +
       "Do not force takeover while the owner remains live"
     );
   }
@@ -1365,7 +1365,7 @@ export function createTelegramLockedPollingRuntime<
           ok: false,
           canTakeover: false,
           message:
-            "Telegram is daemon-managed; run /telegram-daemon start (or start pi-telegram-daemon) to connect.",
+            "Telegram is daemon-managed; run /telegram daemon start (or start pi-telegram-daemon) to connect.",
         };
       }
       let acquired = deps.lock.acquire(ctx, {

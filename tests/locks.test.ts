@@ -1506,7 +1506,7 @@ test("Locked polling runtime diagnoses a live owner with unreachable bus endpoin
       blocked.message,
       /live owner \/ unreachable bus endpoint after bounded retries/,
     );
-    assert.match(blocked.message, /retry \/telegram-connect/);
+    assert.match(blocked.message, /retry \/telegram connect/);
     assert.match(blocked.message, /Do not force takeover/);
   } finally {
     rmSync(temp.dir, { recursive: true, force: true });

@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `Unified /telegram command`: Breaking: `/telegram-setup`, `/telegram-status`, `/telegram-connect`, `/telegram-disconnect`, and `/telegram-daemon` are replaced by one `/telegram <sub>` entry (`setup`, `status`, `connect`, `disconnect`, `daemon start|stop|status`), so the Pi command palette shows a single Telegram command instead of five. All diagnostics, docs, skills, and the daemon's worker-registration prompt now point at the merged names.
+
 ## 0.52.0: Daemon lifecycle commands
 
 - `Daemon lifecycle commands`: `/telegram-daemon start|stop|status` controls the external daemon from Pi. `start` installs a login autostart service (macOS launchd LaunchAgent or Linux systemd user unit, keep-alive/restart) and starts the daemon; `stop` removes autostart and stops it; `status` reports truth from the durable transport-owner and daemon snapshots. The extension never runs transport itself.

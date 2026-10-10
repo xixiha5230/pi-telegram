@@ -66,7 +66,7 @@ Rules:
 - Registration returns a stale-safe disposer that removes only its own registration.
 - Consumers register on `session_start` and dispose on `session_shutdown`.
 - The bridge creates a fresh dispatcher generation on every `session_start`; shutdown stops and clears only the retiring generation, so same-process session replacement resumes delivery instead of leaving Activity permanently stopped.
-- Handler failures are isolated and recorded in `/telegram-status`; they never break Pi lifecycle or other handlers.
+- Handler failures are isolated and recorded in `/telegram status`; they never break Pi lifecycle or other handlers.
 
 ## Activity Identity And Source
 
@@ -269,7 +269,7 @@ The bridge maps Pi hooks as follows:
 
 Duplicate registration fails synchronously. When a handler throws or rejects, the dispatcher forwards only the handler id, event type, activity id, and error to pi-telegram's existing bounded/redacted runtime event recorder. The bridge does not copy reasoning, assistant prose, tool arguments/results, Telegram payloads, or queue contents into diagnostic metadata. It does not currently record queue phase, queue length, coalescing counts, or handler latency.
 
-The first implementation has no public Activity diagnostics getter because handler failures already flow through bridge runtime diagnostics and `/telegram-status`. Add queue telemetry or a dedicated getter only when an observed consumer needs inspectable backpressure state.
+The first implementation has no public Activity diagnostics getter because handler failures already flow through bridge runtime diagnostics and `/telegram status`. Add queue telemetry or a dedicated getter only when an observed consumer needs inspectable backpressure state.
 
 ## Security And Non-Goals
 

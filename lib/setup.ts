@@ -1,7 +1,7 @@
 /**
  * Telegram setup prompt helpers
  * Zones: pi agent command ui, telegram config
- * Computes token-prefill defaults and prompt mode selection for /telegram-setup
+ * Computes token-prefill defaults and prompt mode selection for /telegram setup
  */
 
 export interface TelegramSetupConfig {

@@ -437,7 +437,7 @@ export interface TelegramBridgeCommandRegistrationDeps {
   validateThreadName?: (threadName: string) => string | undefined;
   /**
    * External daemon lifecycle. Present only when the packaged daemon entrypoint is
-   * resolvable; absent means `/telegram-daemon` reports it as unavailable.
+   * resolvable; absent means `/telegram daemon` reports it as unavailable.
    */
   daemonLifecycle?: TelegramDaemonLifecycle;
   /** Switch transport leadership mode; persisted by the caller. */
@@ -531,71 +531,66 @@ export function registerTelegramBridgeCommands(
   pi: ExtensionAPI,
   deps: TelegramBridgeCommandRegistrationDeps,
 ): void {
-  pi.registerCommand("telegram-setup", {
-    description: "Configure Telegram bot token. Use /telegram-setup <name> for named profiles.",
-    handler: async (args, ctx) => {
-      await deps.promptForConfig(ctx, parseTelegramProfileArg(args));
-    },
-  });
-  pi.registerCommand("telegram-status", {
-    description: "Show Telegram bridge status",
-    handler: async (args, ctx) => {
-      const verbose = /(^|\s)(--debug|debug|--verbose|verbose)(\s|$)/i.test(
-        args,
+  const runSetup = async (
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    await deps.promptForConfig(ctx, parseTelegramProfileArg(args));
+  };
+  const runStatus = (args: string, ctx: ExtensionCommandContext): void => {
+    const verbose = /(^|\s)(--debug|debug|--verbose|verbose)(\s|$)/i.test(args);
+    ctx.ui.notify(deps.getStatusLines({ verbose }).join("\n"), "info");
+  };
+  const runDaemon = async (
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
+    const lifecycle = deps.daemonLifecycle;
+    if (!lifecycle) {
+      ctx.ui.notify(
+        "The packaged pi-telegram-daemon entrypoint is unavailable in this install.",
+        "error",
       );
-      ctx.ui.notify(deps.getStatusLines({ verbose }).join("\n"), "info");
-    },
-  });
-  pi.registerCommand("telegram-daemon", {
-    description: "Start, stop, or inspect the external pi-telegram-daemon (start|stop|status).",
-    handler: async (args, ctx) => {
-      const lifecycle = deps.daemonLifecycle;
-      if (!lifecycle) {
-        ctx.ui.notify(
-          "The packaged pi-telegram-daemon entrypoint is unavailable in this install.",
-          "error",
-        );
-        return;
-      }
-      const [verb = "status"] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
-      if (verb === "start") {
-        // Only daemon mode is supported, so make Pi non-leading before starting.
-        if (deps.setClusterLeaderMode) {
-          try {
-            await deps.setClusterLeaderMode("daemon");
-          } catch {
-            ctx.ui.notify(
-              "Could not persist daemon leadership mode; continuing.",
-              "warning",
-            );
-          }
+      return;
+    }
+    const [verb = "status"] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+    if (verb === "start") {
+      // Only daemon mode is supported, so make Pi non-leading before starting.
+      if (deps.setClusterLeaderMode) {
+        try {
+          await deps.setClusterLeaderMode("daemon");
+        } catch {
+          ctx.ui.notify(
+            "Could not persist daemon leadership mode; continuing.",
+            "warning",
+          );
         }
-        const result = await lifecycle.start(ctx.cwd);
-        ctx.ui.notify(result.message, result.ok ? "info" : "error");
-        deps.updateStatus(ctx);
-        return;
       }
-      if (verb === "stop") {
-        const result = await lifecycle.stop();
-        ctx.ui.notify(result.message, result.ok ? "info" : "warning");
-        deps.updateStatus(ctx);
-        return;
-      }
-      if (verb === "status") {
-        const autostart = lifecycle.autostartStatus();
-        ctx.ui.notify(
-          `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
-          "info",
-        );
-        return;
-      }
-      ctx.ui.notify("Usage: /telegram-daemon start|stop|status", "warning");
-    },
-  });
-  pi.registerCommand("telegram-connect", {
-    description:
-      "Start the Telegram bridge. Use /telegram-connect <profile> and optional as=Name for a fresh Workspace Thread.",
-    handler: async (args, ctx) => {
+      const result = await lifecycle.start(ctx.cwd);
+      ctx.ui.notify(result.message, result.ok ? "info" : "error");
+      deps.updateStatus(ctx);
+      return;
+    }
+    if (verb === "stop") {
+      const result = await lifecycle.stop();
+      ctx.ui.notify(result.message, result.ok ? "info" : "warning");
+      deps.updateStatus(ctx);
+      return;
+    }
+    if (verb === "status") {
+      const autostart = lifecycle.autostartStatus();
+      ctx.ui.notify(
+        `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
+        "info",
+      );
+      return;
+    }
+    ctx.ui.notify("Usage: /telegram daemon start|stop|status", "warning");
+  };
+  const runConnect = async (
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
       const profileName = parseTelegramProfileArg(args);
       const requestedNameTokens = args
         .trim()
@@ -606,7 +601,7 @@ export function registerTelegramBridgeCommands(
         requestedNameTokens.length > 1
           ? "Specify at most one as=Name Workspace Thread name."
           : requestedNameTokens.length === 1 && !requestedThreadName
-            ? "Usage: /telegram-connect [profile] as=Flightprice"
+            ? "Usage: /telegram connect [profile] as=Flightprice"
             : requestedThreadName
               ? deps.validateThreadName?.(requestedThreadName)
               : undefined;
@@ -632,7 +627,7 @@ export function registerTelegramBridgeCommands(
         const profileNames = deps.getProfileNames?.() ?? [];
         if (!profileName && profileNames.length > 0) {
           ctx.ui.notify(
-            `No default Telegram profile configured. Available profiles: ${profileNames.join(", ")}. Use /telegram-connect <profileName> or /telegram-setup to create a default profile.`,
+            `No default Telegram profile configured. Available profiles: ${profileNames.join(", ")}. Use /telegram connect <profileName> or /telegram setup to create a default profile.`,
             "info",
           );
           deps.updateStatus(ctx);
@@ -670,7 +665,7 @@ export function registerTelegramBridgeCommands(
             return {
               ok: false,
               message:
-                "Telegram temporary state was recovered, but the bridge could not restart. Restart this Pi instance and run /telegram-connect again.",
+                "Telegram temporary state was recovered, but the bridge could not restart. Restart this Pi instance and run /telegram connect again.",
             };
           }
         }
@@ -702,12 +697,10 @@ export function registerTelegramBridgeCommands(
         deps.queueAgentConnectionContext?.(true);
       }
       deps.updateStatus(ctx);
-    },
-  });
-  pi.registerCommand("telegram-disconnect", {
-    description:
-      "Stop Telegram; in Threaded Mode, delete this instance's current thread",
-    handler: async (_args, ctx) => {
+  };
+  const runDisconnect = async (
+    ctx: ExtensionCommandContext,
+  ): Promise<void> => {
       const threadName = deps.getDisconnectThreadName?.();
       if (threadName) {
         const confirmed = await ctx.ui.confirm(
@@ -727,12 +720,36 @@ export function registerTelegramBridgeCommands(
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(
-          `Telegram disconnect did not complete: ${detail} Keep this Pi session open, restore leader connectivity, inspect /telegram-status --debug, and retry /telegram-disconnect.`,
+          `Telegram disconnect did not complete: ${detail} Keep this Pi session open, restore leader connectivity, inspect /telegram status --debug, and retry /telegram disconnect.`,
           "warning",
         );
         throw error;
       } finally {
         deps.updateStatus(ctx);
+      }
+  };
+  pi.registerCommand("telegram", {
+    description:
+      "Telegram bridge: setup | status | connect | disconnect | daemon start|stop|status",
+    handler: async (args, ctx) => {
+      const [verb = "", ...rest] = args.trim().split(/\s+/u);
+      const sub = rest.join(" ");
+      switch (verb.toLowerCase()) {
+        case "setup":
+          return runSetup(sub, ctx);
+        case "status":
+          return runStatus(sub, ctx);
+        case "connect":
+          return runConnect(sub, ctx);
+        case "disconnect":
+          return runDisconnect(ctx);
+        case "daemon":
+          return runDaemon(sub, ctx);
+        default:
+          ctx.ui.notify(
+            "Usage: /telegram setup | status | connect | disconnect | daemon start|stop|status",
+            "warning",
+          );
       }
     },
   });

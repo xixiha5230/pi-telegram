@@ -864,7 +864,7 @@ test("Bridge status runtime builds status state from live ports", () => {
     "diagnostics:",
     "- state: ~/.pi/agent/tmp/telegram/state.json",
     "- logs: ~/.pi/agent/tmp/telegram/logs.jsonl",
-    "- full dump: /telegram-status --debug",
+    "- full dump: /telegram status --debug",
   ]);
 });
 

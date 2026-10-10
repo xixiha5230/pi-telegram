@@ -381,7 +381,7 @@ function assertTelegramDirectDeliveryAllowed(
 ): void {
   if (canSendDirect?.()) return;
   throw new Error(
-    "Telegram direct delivery requires this Pi instance to own /telegram-connect or be registered with the Telegram multi-instance bus",
+    "Telegram direct delivery requires this Pi instance to own /telegram connect or be registered with the Telegram multi-instance bus",
   );
 }
 

@@ -169,7 +169,7 @@ export function createTelegramDaemonLifecycle(
       }
       const logPath = deps.getLogPath();
       // Persistent autostart is the default: the installed service starts the daemon
-      // now and at login, so `/telegram-daemon start` is the one command to run.
+      // now and at login, so `/telegram daemon start` is the one command to run.
       if (deps.autostartSupported()) {
         const installed = await deps.service.install({
           nodePath: deps.getNodePath(),
