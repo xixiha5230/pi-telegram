@@ -335,6 +335,67 @@ test("Connect reports an unresolved token reference before prompting setup", asy
   ]);
 });
 
+test("telegram-daemon command drives the lifecycle and reports truth", async () => {
+  const harness = createCommandRegistrationApiHarness();
+  const notifications: string[] = [];
+  const calls: string[] = [];
+  registerTelegramBridgeCommands(harness.api, {
+    promptForConfig: async () => {},
+    getStatusLines: () => [],
+    reloadConfig: async () => {},
+    hasBotToken: () => true,
+    startPolling: async () => {},
+    stopPolling: async () => {},
+    updateStatus: () => {
+      calls.push("status");
+    },
+    daemonLifecycle: {
+      start: async (cwd) => {
+        calls.push(`start:${cwd}`);
+        return { ok: true, message: "Telegram daemon listening (pid 1)." };
+      },
+      stop: async () => {
+        calls.push("stop");
+        return { ok: true, message: "Telegram daemon stopped." };
+      },
+      status: () => ({ running: true, pid: 1, workers: 2, routes: 1 }),
+    },
+  });
+  const command = getRequiredCommand(harness.commands, "telegram-daemon");
+  const ctx = createBridgeCommandContext((message) => notifications.push(message));
+  await command.handler("start", ctx);
+  await command.handler("stop", ctx);
+  await command.handler("status", ctx);
+  await command.handler("bogus", ctx);
+  assert.deepEqual(calls, ["start:/repo", "status", "stop", "status"]);
+  assert.deepEqual(notifications, [
+    "Telegram daemon listening (pid 1).",
+    "Telegram daemon stopped.",
+    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1.",
+    "Usage: /telegram-daemon start|stop|status",
+  ]);
+});
+
+test("telegram-daemon command reports an unavailable install", async () => {
+  const harness = createCommandRegistrationApiHarness();
+  const notifications: string[] = [];
+  registerTelegramBridgeCommands(harness.api, {
+    promptForConfig: async () => {},
+    getStatusLines: () => [],
+    reloadConfig: async () => {},
+    hasBotToken: () => true,
+    startPolling: async () => {},
+    stopPolling: async () => {},
+    updateStatus: () => {},
+  });
+  const command = getRequiredCommand(harness.commands, "telegram-daemon");
+  await command.handler(
+    "status",
+    createBridgeCommandContext((message) => notifications.push(message)),
+  );
+  assert.match(notifications[0] ?? "", /entrypoint is unavailable/u);
+});
+
 test("Command helpers register pi setup and status commands", async () => {
   const harness = createCommandRegistrationApiHarness();
   const events: string[] = [];

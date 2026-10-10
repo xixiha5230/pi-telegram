@@ -567,6 +567,8 @@ export interface TelegramCommandsAndToolsBindingDeps {
     threadName: string | undefined,
   ) => void;
   validateThreadName?: Commands.TelegramBridgeCommandRegistrationDeps["validateThreadName"];
+  /** External daemon lifecycle for `/telegram-daemon`; absent when unavailable. */
+  daemonLifecycle?: Commands.TelegramBridgeCommandRegistrationDeps["daemonLifecycle"];
   onTransportChanged?: () => Promise<void> | void;
   getStatusLines: (
     options?: Status.TelegramBridgeStatusLineOptions,
@@ -617,6 +619,7 @@ export function registerTelegramCommandsAndTools({
   getDisconnectThreadName,
   setRequestedThreadNameForPollingStart,
   validateThreadName,
+  daemonLifecycle,
   onTransportChanged,
   getStatusLines,
   buttonActionStore,
@@ -699,6 +702,7 @@ export function registerTelegramCommandsAndTools({
     );
   };
   Commands.registerTelegramBridgeCommands(pi, {
+    daemonLifecycle,
     promptForConfig: async (ctx, profileName) => {
       const nextProfileName = profileName ?? undefined;
       if (profileName && !Config.isValidTelegramProfileName(profileName)) {

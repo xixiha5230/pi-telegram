@@ -17,6 +17,7 @@ import * as ChannelPosts from "./channel-posts.ts";
 import * as ThreadCleanupManager from "./thread-cleanup-manager.ts";
 import * as CommandTemplates from "./command-templates.ts";
 import * as Commands from "./commands.ts";
+import * as DaemonLifecycle from "./daemon-lifecycle.ts";
 import * as Config from "./config.ts";
 import * as Delivery from "./delivery.ts";
 import * as Inbound from "./inbound.ts";
@@ -1798,11 +1799,21 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     },
   }.reset);
   sessionActionsRuntime.register();
+  // The daemon lifecycle only resolves the packaged entrypoint and reads durable
+  // snapshots; the daemon itself remains the single transport owner.
+  const daemonLifecycle = DaemonLifecycle.createTelegramDaemonLifecycle(
+    DaemonLifecycle.createTelegramDaemonLifecyclePorts({
+      getProfileName: configStore.getActiveProfileName,
+      getAgentDir: Paths.resolveAgentDir,
+      recordRuntimeEvent,
+    }),
+  );
   const commandRegistration: Parameters<
     typeof Bindings.registerTelegramCommandsAndTools
   >[0] = {
     pi: host.api,
     agentDir: Paths.resolveAgentDir(),
+    daemonLifecycle,
     configStore,
     persistConfig: persistTelegramConfigWithSync,
     setup,

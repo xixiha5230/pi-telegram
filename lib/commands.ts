@@ -13,6 +13,10 @@ import type * as Pi from "./pi.ts";
 import type { ExtensionAPI, ExtensionCommandContext } from "./pi.ts";
 import { escapeHtml } from "./rendering.ts";
 import type { TelegramBridgeStatusLineOptions } from "./status.ts";
+import {
+  formatTelegramDaemonStatus,
+  type TelegramDaemonLifecycle,
+} from "./daemon-lifecycle.ts";
 import type { TelegramSessionReplacementIntent } from "./threads.ts";
 import {
   createTelegramControlItemBuilder,
@@ -431,6 +435,11 @@ export interface TelegramBridgeCommandRegistrationDeps {
     profileName: string,
   ) => Promise<boolean>;
   validateThreadName?: (threadName: string) => string | undefined;
+  /**
+   * External daemon lifecycle. Present only when the packaged daemon entrypoint is
+   * resolvable; absent means `/telegram-daemon` reports it as unavailable.
+   */
+  daemonLifecycle?: TelegramDaemonLifecycle;
 }
 
 export type TelegramThreadDisplayNameRenamePort = (
@@ -533,6 +542,38 @@ export function registerTelegramBridgeCommands(
         args,
       );
       ctx.ui.notify(deps.getStatusLines({ verbose }).join("\n"), "info");
+    },
+  });
+  pi.registerCommand("telegram-daemon", {
+    description:
+      "Start, stop, or inspect the external pi-telegram-daemon (start|stop|status).",
+    handler: async (args, ctx) => {
+      const lifecycle = deps.daemonLifecycle;
+      if (!lifecycle) {
+        ctx.ui.notify(
+          "The packaged pi-telegram-daemon entrypoint is unavailable in this install.",
+          "error",
+        );
+        return;
+      }
+      const [verb = "status"] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+      if (verb === "start") {
+        const result = await lifecycle.start(ctx.cwd);
+        ctx.ui.notify(result.message, result.ok ? "info" : "error");
+        deps.updateStatus(ctx);
+        return;
+      }
+      if (verb === "stop") {
+        const result = await lifecycle.stop();
+        ctx.ui.notify(result.message, result.ok ? "info" : "warning");
+        deps.updateStatus(ctx);
+        return;
+      }
+      if (verb === "status") {
+        ctx.ui.notify(formatTelegramDaemonStatus(lifecycle.status()), "info");
+        return;
+      }
+      ctx.ui.notify("Usage: /telegram-daemon start|stop|status", "warning");
     },
   });
   pi.registerCommand("telegram-connect", {

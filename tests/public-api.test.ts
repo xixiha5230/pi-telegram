@@ -5,8 +5,16 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+
+/** Derive the published name so a package rename cannot silently break this guard. */
+const packageName = (
+  JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { name: string }
+).name;
 
 async function assertPackagePathNotExported(specifier: string): Promise<void> {
   await assert.rejects(
@@ -32,17 +40,17 @@ test("Public package subpaths expose the stable extension API", async () => {
     voice,
     keyboard,
   ] = await Promise.all([
-    import("@llblab/pi-telegram"),
-    import("@llblab/pi-telegram/inbound"),
-    import("@llblab/pi-telegram/outbound"),
-    import("@llblab/pi-telegram/delivery"),
-    import("@llblab/pi-telegram/activity"),
-    import("@llblab/pi-telegram/updates"),
-    import("@llblab/pi-telegram/commands"),
-    import("@llblab/pi-telegram/sections"),
-    import("@llblab/pi-telegram/status"),
-    import("@llblab/pi-telegram/voice"),
-    import("@llblab/pi-telegram/keyboard"),
+    import(packageName),
+    import(`${packageName}/inbound`),
+    import(`${packageName}/outbound`),
+    import(`${packageName}/delivery`),
+    import(`${packageName}/activity`),
+    import(`${packageName}/updates`),
+    import(`${packageName}/commands`),
+    import(`${packageName}/sections`),
+    import(`${packageName}/status`),
+    import(`${packageName}/voice`),
+    import(`${packageName}/keyboard`),
   ]);
 
   assert.deepEqual(Object.keys(root), ["default"]);
@@ -109,7 +117,7 @@ test("Activity API declares the Pi lifecycle compatibility floor", async () => {
 });
 
 test("Package-private lib implementation paths are not exported", async () => {
-  await assertPackagePathNotExported("@llblab/pi-telegram/lib/updates.ts");
-  await assertPackagePathNotExported("@llblab/pi-telegram/lib/sections.ts");
-  await assertPackagePathNotExported("@llblab/pi-telegram/api/updates.ts");
+  await assertPackagePathNotExported(`${packageName}/lib/updates.ts`);
+  await assertPackagePathNotExported(`${packageName}/lib/sections.ts`);
+  await assertPackagePathNotExported(`${packageName}/api/updates.ts`);
 });
