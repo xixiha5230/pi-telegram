@@ -1,0 +1,31 @@
+tests/commands.test.ts
+  s_26bd2f22699832::t_1bcb68b4c65560 362-364
+  s_26bd2f22699832::t_cdf30c807396a1 371-372,379-382
+lib/daemon-lifecycle.ts
+  s_26bd2f22699832::t_48698a8f521819 13,18-22,64-67,83-87,156-173,281-287
+lib/daemon-service.ts
+  s_26bd2f22699832::t_b76c978bd3bdc5 1-252
+tests/daemon-lifecycle.test.ts
+  s_26bd2f22699832::t_e572f0a1cae4c0 59-64
+  s_26bd2f22699832::t_8840a01676bd49 234-265
+lib/commands.ts
+  s_26bd2f22699832::t_04c5abf6687a86 549,572-581,583-587,590-593
+tests/daemon-service.test.ts
+  s_26bd2f22699832::t_44dadcb5acc094 1-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "d78077357e19f0719214d1e1f71adf461fa75396",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
