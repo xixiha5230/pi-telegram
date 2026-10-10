@@ -602,7 +602,7 @@ export function registerTelegramBridgeCommands(
         autostart.installed && autostart.path
           ? `Autostart: installed at ${autostart.path}`
           : "Autostart: not installed",
-        `Daemon log: ${lifecycle.logPath()}`,
+        `Daemon log: ${lifecycle.logPath?.() ?? "unavailable"}`,
       ];
       ctx.ui.notify(lines.join("\n"), "info");
       return;
