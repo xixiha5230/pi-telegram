@@ -56,6 +56,12 @@ function setup(overrides: Partial<TelegramDaemonLifecycleDeps> = {}) {
     },
     sleep: clock.sleep,
     now: clock.now,
+    getAgentDir: () => "/agent",
+    service: {
+      status: () => ({ installed: false }),
+      install: async () => ({ ok: true, message: "installed" }),
+      uninstall: async () => ({ ok: true, message: "removed" }),
+    },
     ...overrides,
   };
   const lifecycle = createTelegramDaemonLifecycle(deps);
@@ -224,4 +230,37 @@ test("Lifecycle status and format report truth only", () => {
     formatTelegramDaemonStatus(status),
     "Telegram daemon: running (pid 55) \u00b7 cwd /repo \u00b7 workers 3 \u00b7 routes 2.",
   );
+});
+
+test("Lifecycle autostart delegates to the service installer", async () => {
+  const installs: unknown[] = [];
+  const s = setup({
+    service: {
+      status: () => ({ installed: true, path: "/svc" }),
+      install: async (spec) => {
+        installs.push(spec);
+        return { ok: true, message: "installed" };
+      },
+      uninstall: async () => ({ ok: true, message: "removed" }),
+    },
+  });
+  assert.deepEqual(s.lifecycle.autostartStatus(), { installed: true, path: "/svc" });
+  assert.equal((await s.lifecycle.installAutostart("/repo")).ok, true);
+  assert.deepEqual(installs, [
+    {
+      nodePath: "/usr/bin/node",
+      daemonBinPath: "/pkg/bin/pi-telegram-daemon.mjs",
+      cwd: "/repo",
+      agentDir: "/agent",
+      logPath: "/tmp/daemon.log",
+    },
+  ]);
+  assert.equal((await s.lifecycle.uninstallAutostart()).ok, true);
+});
+
+test("Lifecycle autostart fails closed without a packaged entrypoint", async () => {
+  const s = setup({ resolveDaemonBinPath: () => undefined });
+  const result = await s.lifecycle.installAutostart("/repo");
+  assert.equal(result.ok, false);
+  assert.match(result.message, /entrypoint could not be found/u);
 });

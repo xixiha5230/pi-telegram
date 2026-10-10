@@ -546,7 +546,7 @@ export function registerTelegramBridgeCommands(
   });
   pi.registerCommand("telegram-daemon", {
     description:
-      "Start, stop, or inspect the external pi-telegram-daemon (start|stop|status).",
+      "Control the external pi-telegram-daemon: start|stop|status|install|uninstall.",
     handler: async (args, ctx) => {
       const lifecycle = deps.daemonLifecycle;
       if (!lifecycle) {
@@ -569,11 +569,28 @@ export function registerTelegramBridgeCommands(
         deps.updateStatus(ctx);
         return;
       }
-      if (verb === "status") {
-        ctx.ui.notify(formatTelegramDaemonStatus(lifecycle.status()), "info");
+      if (verb === "install") {
+        const result = await lifecycle.installAutostart(ctx.cwd);
+        ctx.ui.notify(result.message, result.ok ? "info" : "error");
         return;
       }
-      ctx.ui.notify("Usage: /telegram-daemon start|stop|status", "warning");
+      if (verb === "uninstall") {
+        const result = await lifecycle.uninstallAutostart();
+        ctx.ui.notify(result.message, result.ok ? "info" : "warning");
+        return;
+      }
+      if (verb === "status") {
+        const autostart = lifecycle.autostartStatus();
+        ctx.ui.notify(
+          `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
+          "info",
+        );
+        return;
+      }
+      ctx.ui.notify(
+        "Usage: /telegram-daemon start|stop|status|install|uninstall",
+        "warning",
+      );
     },
   });
   pi.registerCommand("telegram-connect", {

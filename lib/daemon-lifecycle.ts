@@ -10,10 +10,16 @@
 
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import * as Paths from "./paths.ts";
+import {
+  createTelegramDaemonServiceInstaller,
+  createTelegramDaemonServiceInstallerPorts,
+  type TelegramDaemonServiceInstaller,
+} from "./daemon-service.ts";
 
 /** Pi session-descriptor variables a daemon must not inherit from the launching Pi. */
 const INHERITED_SESSION_ENV_KEYS = [
@@ -55,6 +61,10 @@ export interface TelegramDaemonLifecycleDeps {
   }) => number | undefined;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
+  /** Resolved agent directory, passed to an installed service. */
+  getAgentDir: () => string;
+  /** OS service installer for login autostart. */
+  service: TelegramDaemonServiceInstaller;
   recordEvent?: (message: string, details?: Record<string, unknown>) => void;
 }
 
@@ -70,6 +80,11 @@ export interface TelegramDaemonLifecycle {
   start: (cwd: string) => Promise<{ ok: boolean; message: string }>;
   stop: () => Promise<{ ok: boolean; message: string }>;
   status: () => TelegramDaemonLifecycleStatus;
+  /** Install a login autostart service; explicit operator action. */
+  installAutostart: (cwd: string) => Promise<{ ok: boolean; message: string }>;
+  /** Remove the login autostart service. */
+  uninstallAutostart: () => Promise<{ ok: boolean; message: string }>;
+  autostartStatus: () => { installed: boolean; path?: string };
 }
 
 const START_READY_TIMEOUT_MS = 8_000;
@@ -138,6 +153,24 @@ export function createTelegramDaemonLifecycle(
 
   return {
     status,
+    autostartStatus: () => deps.service.status(),
+    async installAutostart(cwd) {
+      const binPath = deps.resolveDaemonBinPath();
+      if (!binPath) {
+        return {
+          ok: false,
+          message: "The packaged daemon entrypoint could not be found.",
+        };
+      }
+      return deps.service.install({
+        nodePath: deps.getNodePath(),
+        daemonBinPath: binPath,
+        cwd,
+        agentDir: deps.getAgentDir(),
+        logPath: deps.getLogPath(),
+      });
+    },
+    uninstallAutostart: () => deps.service.uninstall(),
     async start(cwd: string) {
       const owner = liveOwner();
       if (owner) {
@@ -245,6 +278,13 @@ export function createTelegramDaemonLifecyclePorts(input: {
     spawnDetached: spawnDetachedTelegramDaemon,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),
+    getAgentDir: input.getAgentDir,
+    service: createTelegramDaemonServiceInstaller(
+      createTelegramDaemonServiceInstallerPorts({
+        homeDir: homedir(),
+        recordRuntimeEvent: input.recordRuntimeEvent,
+      }),
+    ),
     recordEvent: (message, details) => input.recordRuntimeEvent?.("daemon", message, details),
   };
 }

@@ -359,20 +359,27 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
         return { ok: true, message: "Telegram daemon stopped." };
       },
       status: () => ({ running: true, pid: 1, workers: 2, routes: 1 }),
+      installAutostart: async () => ({ ok: true, message: "Installed autostart." }),
+      uninstallAutostart: async () => ({ ok: true, message: "Removed autostart." }),
+      autostartStatus: () => ({ installed: false }),
     },
   });
   const command = getRequiredCommand(harness.commands, "telegram-daemon");
   const ctx = createBridgeCommandContext((message) => notifications.push(message));
   await command.handler("start", ctx);
   await command.handler("stop", ctx);
+  await command.handler("install", ctx);
+  await command.handler("uninstall", ctx);
   await command.handler("status", ctx);
   await command.handler("bogus", ctx);
   assert.deepEqual(calls, ["start:/repo", "status", "stop", "status"]);
   assert.deepEqual(notifications, [
     "Telegram daemon listening (pid 1).",
     "Telegram daemon stopped.",
-    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1.",
-    "Usage: /telegram-daemon start|stop|status",
+    "Installed autostart.",
+    "Removed autostart.",
+    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Autostart is not installed.",
+    "Usage: /telegram-daemon start|stop|status|install|uninstall",
   ]);
 });
 
