@@ -1,0 +1,25 @@
+lib/commands.ts
+  s_26bd2f22699832::t_8e1185a61e9ede 569-574,578-583,589-594,600-607
+lib/daemon-lifecycle.ts
+  s_26bd2f22699832::t_ac57a5ef56ee0e 89-90,163
+tests/commands.test.ts
+  s_26bd2f22699832::t_707d53f93b2285 380,390-397,399,401,403-404
+CHANGELOG.md
+  s_26bd2f22699832::t_444fcd169bcde2 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "13fba638d7d4d8084fa96021e78c9161c91310fc",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "glm-5.3"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
