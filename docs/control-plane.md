@@ -287,19 +287,18 @@ catalog file to maintain.
 
 ### Run And Autostart
 
-The daemon is a separate process the operator starts once per profile.
+The daemon is a separate process the operator starts once per profile; the extension
+only uses daemon mode.
 
 - `pi-telegram-daemon --cwd <abs-dir>` runs it in the foreground; it owns transport,
   `getUpdates`, the direct Bot API, the inbound journal, the registry, routing, and the
   supervisor, and shuts down gracefully on `SIGINT`/`SIGTERM`.
-- From Pi, `/telegram-daemon start|stop|status` starts it detached (so it survives the
-  Pi process), stops it, or reports truth from the durable transport-owner and daemon
-  snapshots. `/telegram-daemon mode auto|daemon` switches transport leadership between
-  the standalone embedded leader and the daemon-only policy.
-- `/telegram-daemon install|uninstall` installs or removes a login autostart service:
-  a macOS launchd LaunchAgent or a Linux systemd user unit with keep-alive/restart.
-  Installation is an explicit, reversible operator action; nothing installs silently,
-  and an unsupported platform fails closed.
+- From Pi, `/telegram-daemon start` installs a login autostart service and starts the
+  daemon: a macOS launchd LaunchAgent or a Linux systemd user unit with
+  keep-alive/restart. `/telegram-daemon stop` removes autostart and stops the daemon,
+  and `status` reports truth from the durable transport-owner and daemon snapshots.
+  Installing autostart is explicit and reversible; an unsupported platform starts a
+  detached process without persistence instead of guessing.
 - The daemon must run as the same user as the Pi instances so it shares `telegram.json`,
   `owners.json`, and the bus sockets. A custom `PI_CODING_AGENT_DIR` is written into the
   installed unit.

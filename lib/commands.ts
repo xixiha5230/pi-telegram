@@ -440,8 +440,6 @@ export interface TelegramBridgeCommandRegistrationDeps {
    * resolvable; absent means `/telegram-daemon` reports it as unavailable.
    */
   daemonLifecycle?: TelegramDaemonLifecycle;
-  /** Current transport leadership mode (`auto` standalone vs `daemon`). */
-  getClusterLeaderMode?: () => "auto" | "daemon";
   /** Switch transport leadership mode; persisted by the caller. */
   setClusterLeaderMode?: (mode: "auto" | "daemon") => Promise<void>;
 }
@@ -549,8 +547,7 @@ export function registerTelegramBridgeCommands(
     },
   });
   pi.registerCommand("telegram-daemon", {
-    description:
-      "Control the external pi-telegram-daemon: start|stop|status|install|uninstall.",
+    description: "Start, stop, or inspect the external pi-telegram-daemon (start|stop|status).",
     handler: async (args, ctx) => {
       const lifecycle = deps.daemonLifecycle;
       if (!lifecycle) {
@@ -560,8 +557,19 @@ export function registerTelegramBridgeCommands(
         );
         return;
       }
-      const [verb = "status", ...rest] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+      const [verb = "status"] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
       if (verb === "start") {
+        // Only daemon mode is supported, so make Pi non-leading before starting.
+        if (deps.setClusterLeaderMode) {
+          try {
+            await deps.setClusterLeaderMode("daemon");
+          } catch {
+            ctx.ui.notify(
+              "Could not persist daemon leadership mode; continuing.",
+              "warning",
+            );
+          }
+        }
         const result = await lifecycle.start(ctx.cwd);
         ctx.ui.notify(result.message, result.ok ? "info" : "error");
         deps.updateStatus(ctx);
@@ -573,44 +581,15 @@ export function registerTelegramBridgeCommands(
         deps.updateStatus(ctx);
         return;
       }
-      if (verb === "install") {
-        const result = await lifecycle.installAutostart(ctx.cwd);
-        ctx.ui.notify(result.message, result.ok ? "info" : "error");
-        return;
-      }
-      if (verb === "uninstall") {
-        const result = await lifecycle.uninstallAutostart();
-        ctx.ui.notify(result.message, result.ok ? "info" : "warning");
-        return;
-      }
-      if (verb === "mode") {
-        const mode = (rest[0] ?? "").toLowerCase();
-        if (mode !== "auto" && mode !== "daemon") {
-          ctx.ui.notify("Usage: /telegram-daemon mode auto|daemon", "warning");
-          return;
-        }
-        if (!deps.setClusterLeaderMode) {
-          ctx.ui.notify("Leadership mode cannot be changed in this install.", "error");
-          return;
-        }
-        await deps.setClusterLeaderMode(mode);
-        ctx.ui.notify(`Telegram leadership mode set to "${mode}".`, "info");
-        deps.updateStatus(ctx);
-        return;
-      }
       if (verb === "status") {
         const autostart = lifecycle.autostartStatus();
-        const mode = deps.getClusterLeaderMode?.() ?? "auto";
         ctx.ui.notify(
-          `${formatTelegramDaemonStatus(lifecycle.status())} Leadership: ${mode}. ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
+          `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
           "info",
         );
         return;
       }
-      ctx.ui.notify(
-        "Usage: /telegram-daemon start|stop|status|install|uninstall|mode",
-        "warning",
-      );
+      ctx.ui.notify("Usage: /telegram-daemon start|stop|status", "warning");
     },
   });
   pi.registerCommand("telegram-connect", {

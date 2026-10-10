@@ -569,7 +569,6 @@ export interface TelegramCommandsAndToolsBindingDeps {
   validateThreadName?: Commands.TelegramBridgeCommandRegistrationDeps["validateThreadName"];
   /** External daemon lifecycle for `/telegram-daemon`; absent when unavailable. */
   daemonLifecycle?: Commands.TelegramBridgeCommandRegistrationDeps["daemonLifecycle"];
-  getClusterLeaderMode?: Commands.TelegramBridgeCommandRegistrationDeps["getClusterLeaderMode"];
   setClusterLeaderMode?: Commands.TelegramBridgeCommandRegistrationDeps["setClusterLeaderMode"];
   onTransportChanged?: () => Promise<void> | void;
   getStatusLines: (
@@ -705,8 +704,6 @@ export function registerTelegramCommandsAndTools({
   };
   Commands.registerTelegramBridgeCommands(pi, {
     daemonLifecycle,
-    getClusterLeaderMode: () =>
-      configStore.get().cluster?.leader === "daemon" ? "daemon" : "auto",
     setClusterLeaderMode: async (mode) => {
       configStore.update((config) => {
         config.cluster = { ...(config.cluster ?? {}), leader: mode };

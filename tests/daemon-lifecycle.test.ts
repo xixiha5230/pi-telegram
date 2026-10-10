@@ -62,6 +62,7 @@ function setup(overrides: Partial<TelegramDaemonLifecycleDeps> = {}) {
       install: async () => ({ ok: true, message: "installed" }),
       uninstall: async () => ({ ok: true, message: "removed" }),
     },
+    autostartSupported: () => false,
     ...overrides,
   };
   const lifecycle = createTelegramDaemonLifecycle(deps);
@@ -232,9 +233,10 @@ test("Lifecycle status and format report truth only", () => {
   );
 });
 
-test("Lifecycle autostart delegates to the service installer", async () => {
+test("Lifecycle start installs autostart and waits for the service to start it", async () => {
   const installs: unknown[] = [];
   const s = setup({
+    autostartSupported: () => true,
     service: {
       status: () => ({ installed: true, path: "/svc" }),
       install: async (spec) => {
@@ -244,8 +246,11 @@ test("Lifecycle autostart delegates to the service installer", async () => {
       uninstall: async () => ({ ok: true, message: "removed" }),
     },
   });
-  assert.deepEqual(s.lifecycle.autostartStatus(), { installed: true, path: "/svc" });
-  assert.equal((await s.lifecycle.installAutostart("/repo")).ok, true);
+  const start = s.lifecycle.start("/repo");
+  s.setOwner({ pid: 900, cwd: "/repo" });
+  const result = await start;
+  assert.equal(result.ok, true);
+  assert.match(result.message, /listening \(pid 900\); autostart installed/u);
   assert.deepEqual(installs, [
     {
       nodePath: "/usr/bin/node",
@@ -255,12 +260,38 @@ test("Lifecycle autostart delegates to the service installer", async () => {
       logPath: "/tmp/daemon.log",
     },
   ]);
-  assert.equal((await s.lifecycle.uninstallAutostart()).ok, true);
+  // The service starts the daemon, so no ad-hoc process is spawned.
+  assert.deepEqual(s.spawns, []);
 });
 
-test("Lifecycle autostart fails closed without a packaged entrypoint", async () => {
+test("Lifecycle stop removes autostart before signaling the daemon", async () => {
+  const order: string[] = [];
+  let owner: { pid: number } | undefined = { pid: 42 };
+  const s = setup({
+    autostartSupported: () => true,
+    readOwner: () => owner,
+    service: {
+      status: () => ({ installed: true }),
+      install: async () => ({ ok: true, message: "installed" }),
+      uninstall: async () => {
+        order.push("uninstall");
+        return { ok: true, message: "removed" };
+      },
+    },
+    killProcess: (pid, signal) => {
+      order.push(`kill:${pid}:${signal}`);
+      owner = undefined;
+    },
+  });
+  const result = await s.lifecycle.stop();
+  assert.equal(result.ok, true);
+  assert.match(result.message, /Autostart removed/u);
+  assert.deepEqual(order, ["uninstall", "kill:42:SIGTERM"]);
+});
+
+test("Lifecycle start fails closed without a packaged entrypoint", async () => {
   const s = setup({ resolveDaemonBinPath: () => undefined });
-  const result = await s.lifecycle.installAutostart("/repo");
+  const result = await s.lifecycle.start("/repo");
   assert.equal(result.ok, false);
   assert.match(result.message, /entrypoint could not be found/u);
 });

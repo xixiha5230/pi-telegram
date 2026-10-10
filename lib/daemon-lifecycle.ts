@@ -18,6 +18,7 @@ import * as Paths from "./paths.ts";
 import {
   createTelegramDaemonServiceInstaller,
   createTelegramDaemonServiceInstallerPorts,
+  getTelegramDaemonServiceLabel,
   type TelegramDaemonServiceInstaller,
 } from "./daemon-service.ts";
 
@@ -65,6 +66,8 @@ export interface TelegramDaemonLifecycleDeps {
   getAgentDir: () => string;
   /** OS service installer for login autostart. */
   service: TelegramDaemonServiceInstaller;
+  /** Whether login autostart can be installed on this platform. */
+  autostartSupported: () => boolean;
   recordEvent?: (message: string, details?: Record<string, unknown>) => void;
 }
 
@@ -77,13 +80,11 @@ export interface TelegramDaemonLifecycleStatus {
 }
 
 export interface TelegramDaemonLifecycle {
+  /** Install login autostart and start the daemon; the one command to run. */
   start: (cwd: string) => Promise<{ ok: boolean; message: string }>;
+  /** Remove login autostart and stop the daemon. */
   stop: () => Promise<{ ok: boolean; message: string }>;
   status: () => TelegramDaemonLifecycleStatus;
-  /** Install a login autostart service; explicit operator action. */
-  installAutostart: (cwd: string) => Promise<{ ok: boolean; message: string }>;
-  /** Remove the login autostart service. */
-  uninstallAutostart: () => Promise<{ ok: boolean; message: string }>;
   autostartStatus: () => { installed: boolean; path?: string };
 }
 
@@ -151,26 +152,12 @@ export function createTelegramDaemonLifecycle(
     return predicate();
   };
 
+  const waitForOwner = (): Promise<boolean> =>
+    waitFor(() => liveOwner() !== undefined, START_READY_TIMEOUT_MS);
+
   return {
     status,
     autostartStatus: () => deps.service.status(),
-    async installAutostart(cwd) {
-      const binPath = deps.resolveDaemonBinPath();
-      if (!binPath) {
-        return {
-          ok: false,
-          message: "The packaged daemon entrypoint could not be found.",
-        };
-      }
-      return deps.service.install({
-        nodePath: deps.getNodePath(),
-        daemonBinPath: binPath,
-        cwd,
-        agentDir: deps.getAgentDir(),
-        logPath: deps.getLogPath(),
-      });
-    },
-    uninstallAutostart: () => deps.service.uninstall(),
     async start(cwd: string) {
       const owner = liveOwner();
       if (owner) {
@@ -178,12 +165,33 @@ export function createTelegramDaemonLifecycle(
       }
       const binPath = deps.resolveDaemonBinPath();
       if (!binPath) {
-        return {
-          ok: false,
-          message: "The packaged daemon entrypoint could not be found.",
-        };
+        return { ok: false, message: "The packaged daemon entrypoint could not be found." };
       }
       const logPath = deps.getLogPath();
+      // Persistent autostart is the default: the installed service starts the daemon
+      // now and at login, so `/telegram-daemon start` is the one command to run.
+      if (deps.autostartSupported()) {
+        const installed = await deps.service.install({
+          nodePath: deps.getNodePath(),
+          daemonBinPath: binPath,
+          cwd,
+          agentDir: deps.getAgentDir(),
+          logPath,
+        });
+        if (!installed.ok) return installed;
+        if (!(await waitForOwner())) {
+          return {
+            ok: false,
+            message: `Autostart was installed but the daemon is not ready yet. Check ${logPath}.`,
+          };
+        }
+        const started = liveOwner();
+        return {
+          ok: true,
+          message: `Telegram daemon listening (pid ${started?.pid}); autostart installed.`,
+        };
+      }
+      // Unsupported platform: a detached process only, with no persistence.
       try {
         mkdirSync(dirname(logPath), { recursive: true });
       } catch {
@@ -199,8 +207,7 @@ export function createTelegramDaemonLifecycle(
       if (pid === undefined) {
         return { ok: false, message: "The daemon process could not be started." };
       }
-      const ready = await waitFor(() => liveOwner() !== undefined, START_READY_TIMEOUT_MS);
-      if (!ready) {
+      if (!(await waitForOwner())) {
         deps.recordEvent?.("Telegram daemon did not become ready", { phase: "daemon-start", pid });
         return {
           ok: false,
@@ -208,15 +215,17 @@ export function createTelegramDaemonLifecycle(
         };
       }
       const started = liveOwner();
-      return {
-        ok: true,
-        message: `Telegram daemon listening (pid ${started?.pid ?? pid}).`,
-      };
+      return { ok: true, message: `Telegram daemon listening (pid ${started?.pid ?? pid}).` };
     },
     async stop() {
+      // Remove autostart first so the service cannot restart the daemon we stop.
+      const removedAutostart = deps.autostartSupported()
+        ? await deps.service.uninstall()
+        : undefined;
+      const autostartNote = removedAutostart?.ok ? " Autostart removed." : "";
       const owner = liveOwner();
       if (!owner) {
-        return { ok: true, message: "The daemon is not running." };
+        return { ok: true, message: `The daemon is not running.${autostartNote}` };
       }
       try {
         deps.killProcess(owner.pid, "SIGTERM");
@@ -230,7 +239,7 @@ export function createTelegramDaemonLifecycle(
       }
       const stopped = await waitFor(() => liveOwner() === undefined, STOP_READY_TIMEOUT_MS);
       return stopped
-        ? { ok: true, message: "Telegram daemon stopped." }
+        ? { ok: true, message: `Telegram daemon stopped.${autostartNote}` }
         : { ok: false, message: `The daemon (pid ${owner.pid}) is still running.` };
     },
   };
@@ -285,6 +294,8 @@ export function createTelegramDaemonLifecyclePorts(input: {
         recordRuntimeEvent: input.recordRuntimeEvent,
       }),
     ),
+    autostartSupported: () =>
+      getTelegramDaemonServiceLabel(process.platform) !== undefined,
     recordEvent: (message, details) => input.recordRuntimeEvent?.("daemon", message, details),
   };
 }

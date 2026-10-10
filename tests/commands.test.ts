@@ -350,7 +350,6 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
     updateStatus: () => {
       calls.push("status");
     },
-    getClusterLeaderMode: () => mode,
     setClusterLeaderMode: async (next) => {
       mode = next;
       calls.push(`mode:${next}`);
@@ -358,45 +357,29 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
     daemonLifecycle: {
       start: async (cwd) => {
         calls.push(`start:${cwd}`);
-        return { ok: true, message: "Telegram daemon listening (pid 1)." };
+        return { ok: true, message: "Telegram daemon listening (pid 1); autostart installed." };
       },
       stop: async () => {
         calls.push("stop");
-        return { ok: true, message: "Telegram daemon stopped." };
+        return { ok: true, message: "Telegram daemon stopped. Autostart removed." };
       },
       status: () => ({ running: true, pid: 1, workers: 2, routes: 1 }),
-      installAutostart: async () => ({ ok: true, message: "Installed autostart." }),
-      uninstallAutostart: async () => ({ ok: true, message: "Removed autostart." }),
       autostartStatus: () => ({ installed: false }),
     },
   });
   const command = getRequiredCommand(harness.commands, "telegram-daemon");
   const ctx = createBridgeCommandContext((message) => notifications.push(message));
   await command.handler("start", ctx);
+  assert.equal(mode, "daemon");
   await command.handler("stop", ctx);
-  await command.handler("install", ctx);
-  await command.handler("uninstall", ctx);
-  await command.handler("mode daemon", ctx);
-  await command.handler("mode bogus", ctx);
   await command.handler("status", ctx);
   await command.handler("bogus", ctx);
-  assert.deepEqual(calls, [
-    "start:/repo",
-    "status",
-    "stop",
-    "status",
-    "mode:daemon",
-    "status",
-  ]);
+  assert.deepEqual(calls, ["mode:daemon", "start:/repo", "status", "stop", "status"]);
   assert.deepEqual(notifications, [
-    "Telegram daemon listening (pid 1).",
-    "Telegram daemon stopped.",
-    "Installed autostart.",
-    "Removed autostart.",
-    "Telegram leadership mode set to \"daemon\".",
-    "Usage: /telegram-daemon mode auto|daemon",
-    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Leadership: daemon. Autostart is not installed.",
-    "Usage: /telegram-daemon start|stop|status|install|uninstall|mode",
+    "Telegram daemon listening (pid 1); autostart installed.",
+    "Telegram daemon stopped. Autostart removed.",
+    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Autostart is not installed.",
+    "Usage: /telegram-daemon start|stop|status",
   ]);
 });
 
