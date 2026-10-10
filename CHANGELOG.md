@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `Daemon lifecycle commands`: `/telegram-daemon start|stop|status|install|uninstall|mode` controls the external daemon from Pi. It spawns the daemon detached so it survives the Pi process, reports truth from the durable transport-owner and daemon snapshots, installs a login autostart service (macOS launchd LaunchAgent or Linux systemd user unit, explicit and reversible), and switches transport leadership between `auto` and `daemon`. It never runs transport itself.
+
 ## 0.51.0: External Telegram control plane
 
 - `Daemon control panel`: A daemon-owned thread exposes `/daemon`, opening a button panel that never closes itself: Workers lists one `📍 <project>` row per worker with `🛑 Stop` (behind a confirmation) and `♻️ Restart`, then the New worker picker, Status, and an explicit ✖️ Close. `/workers`, `/attach <worker>`, and `/detach` work in both topologies, so a Pi-owned bridge reaches its leader-gated roster; attach re-homes the worker's Thread so inbound delivery follows it.

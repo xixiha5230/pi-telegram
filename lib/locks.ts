@@ -1365,7 +1365,7 @@ export function createTelegramLockedPollingRuntime<
           ok: false,
           canTakeover: false,
           message:
-            "Telegram is daemon-managed; start pi-telegram-daemon to connect.",
+            "Telegram is daemon-managed; run /telegram-daemon start (or start pi-telegram-daemon) to connect.",
         };
       }
       let acquired = deps.lock.acquire(ctx, {

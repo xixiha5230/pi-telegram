@@ -339,6 +339,7 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
   const harness = createCommandRegistrationApiHarness();
   const notifications: string[] = [];
   const calls: string[] = [];
+  let mode: "auto" | "daemon" = "auto";
   registerTelegramBridgeCommands(harness.api, {
     promptForConfig: async () => {},
     getStatusLines: () => [],
@@ -348,6 +349,11 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
     stopPolling: async () => {},
     updateStatus: () => {
       calls.push("status");
+    },
+    getClusterLeaderMode: () => mode,
+    setClusterLeaderMode: async (next) => {
+      mode = next;
+      calls.push(`mode:${next}`);
     },
     daemonLifecycle: {
       start: async (cwd) => {
@@ -370,16 +376,27 @@ test("telegram-daemon command drives the lifecycle and reports truth", async () 
   await command.handler("stop", ctx);
   await command.handler("install", ctx);
   await command.handler("uninstall", ctx);
+  await command.handler("mode daemon", ctx);
+  await command.handler("mode bogus", ctx);
   await command.handler("status", ctx);
   await command.handler("bogus", ctx);
-  assert.deepEqual(calls, ["start:/repo", "status", "stop", "status"]);
+  assert.deepEqual(calls, [
+    "start:/repo",
+    "status",
+    "stop",
+    "status",
+    "mode:daemon",
+    "status",
+  ]);
   assert.deepEqual(notifications, [
     "Telegram daemon listening (pid 1).",
     "Telegram daemon stopped.",
     "Installed autostart.",
     "Removed autostart.",
-    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Autostart is not installed.",
-    "Usage: /telegram-daemon start|stop|status|install|uninstall",
+    "Telegram leadership mode set to \"daemon\".",
+    "Usage: /telegram-daemon mode auto|daemon",
+    "Telegram daemon: running (pid 1) \u00b7 workers 2 \u00b7 routes 1. Leadership: daemon. Autostart is not installed.",
+    "Usage: /telegram-daemon start|stop|status|install|uninstall|mode",
   ]);
 });
 

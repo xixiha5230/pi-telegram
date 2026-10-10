@@ -440,6 +440,10 @@ export interface TelegramBridgeCommandRegistrationDeps {
    * resolvable; absent means `/telegram-daemon` reports it as unavailable.
    */
   daemonLifecycle?: TelegramDaemonLifecycle;
+  /** Current transport leadership mode (`auto` standalone vs `daemon`). */
+  getClusterLeaderMode?: () => "auto" | "daemon";
+  /** Switch transport leadership mode; persisted by the caller. */
+  setClusterLeaderMode?: (mode: "auto" | "daemon") => Promise<void>;
 }
 
 export type TelegramThreadDisplayNameRenamePort = (
@@ -556,7 +560,7 @@ export function registerTelegramBridgeCommands(
         );
         return;
       }
-      const [verb = "status"] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+      const [verb = "status", ...rest] = args.trim().toLowerCase().split(/\s+/u).filter(Boolean);
       if (verb === "start") {
         const result = await lifecycle.start(ctx.cwd);
         ctx.ui.notify(result.message, result.ok ? "info" : "error");
@@ -579,16 +583,32 @@ export function registerTelegramBridgeCommands(
         ctx.ui.notify(result.message, result.ok ? "info" : "warning");
         return;
       }
+      if (verb === "mode") {
+        const mode = (rest[0] ?? "").toLowerCase();
+        if (mode !== "auto" && mode !== "daemon") {
+          ctx.ui.notify("Usage: /telegram-daemon mode auto|daemon", "warning");
+          return;
+        }
+        if (!deps.setClusterLeaderMode) {
+          ctx.ui.notify("Leadership mode cannot be changed in this install.", "error");
+          return;
+        }
+        await deps.setClusterLeaderMode(mode);
+        ctx.ui.notify(`Telegram leadership mode set to "${mode}".`, "info");
+        deps.updateStatus(ctx);
+        return;
+      }
       if (verb === "status") {
         const autostart = lifecycle.autostartStatus();
+        const mode = deps.getClusterLeaderMode?.() ?? "auto";
         ctx.ui.notify(
-          `${formatTelegramDaemonStatus(lifecycle.status())} ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
+          `${formatTelegramDaemonStatus(lifecycle.status())} Leadership: ${mode}. ${autostart.installed ? "Autostart is installed." : "Autostart is not installed."}`,
           "info",
         );
         return;
       }
       ctx.ui.notify(
-        "Usage: /telegram-daemon start|stop|status|install|uninstall",
+        "Usage: /telegram-daemon start|stop|status|install|uninstall|mode",
         "warning",
       );
     },
