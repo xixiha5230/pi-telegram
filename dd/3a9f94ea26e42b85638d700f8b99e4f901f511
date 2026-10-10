@@ -1,0 +1,33 @@
+tests/daemon-lifecycle.test.ts
+  s_26bd2f22699832::t_07f81d584243e8 65,236,239,249-253,263-268,270-271,273-282,284-285,287-289,292,294
+  s_26bd2f22699832::t_652146e44d7d8a 269,272,283,286
+tests/commands.test.ts
+  s_26bd2f22699832::t_e7807b7b67ae83 360,364,373,377,379-382
+docs/control-plane.md
+  s_26bd2f22699832::t_116d4b6530beba 290-291,296-301
+lib/daemon-lifecycle.ts
+  s_26bd2f22699832::t_838a9a9312db5b 69-70,83,85,155-157,168-188,190-191,194,210,218,221-225,228,242
+  s_26bd2f22699832::t_7b9dee44e969a0 21,297-298
+README.md
+  s_26bd2f22699832::t_fc566b4cdae324 301
+lib/commands.ts
+  s_26bd2f22699832::t_92ea371c0154e5 550,560,562-572,587,592
+CHANGELOG.md
+  s_26bd2f22699832::t_08d40709930d16 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "dd3a9f94ea26e42b85638d700f8b99e4f901f511",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
