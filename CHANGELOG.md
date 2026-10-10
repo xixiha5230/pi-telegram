@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+## 0.52.0: Daemon lifecycle commands
+
 - `Daemon lifecycle commands`: `/telegram-daemon start|stop|status` controls the external daemon from Pi. `start` installs a login autostart service (macOS launchd LaunchAgent or Linux systemd user unit, keep-alive/restart) and starts the daemon; `stop` removes autostart and stops it; `status` reports truth from the durable transport-owner and daemon snapshots. The extension never runs transport itself.
 
 ## 0.51.0: External Telegram control plane
