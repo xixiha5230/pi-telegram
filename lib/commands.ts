@@ -1299,6 +1299,8 @@ export interface TelegramCommandRuntimeDeps<
   TMessage extends TelegramCommandRuntimeMessage,
   TContext,
 > extends TelegramRuntimeEventRecorderPort {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   hasAbortHandler: () => boolean;
   clearPendingModelSwitch: () => void;
   hasQueuedTelegramItems: () => boolean;
@@ -1711,6 +1713,8 @@ export interface TelegramSessionsCallbackDeps {
     replyMarkup: TelegramCompactConfirmationReplyMarkup,
   ) => Promise<void>;
   requestSwitchSession?: (source: unknown, sessionPath: string) => void;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   recordRuntimeEvent?: (
     category: string,
     error: unknown,
@@ -1718,8 +1722,10 @@ export interface TelegramSessionsCallbackDeps {
   ) => void;
 }
 
-function buildTelegramProjectListHtml(): string {
-  return formatTelegramInformationHeading("📚", "Projects — tap to open");
+function buildTelegramProjectListHtml(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return formatTelegramInformationHeading("📚", t(locale, "sessions.projectsTitle"));
 }
 
 function buildTelegramProjectKeyboard(
@@ -1737,16 +1743,20 @@ function buildTelegramProjectKeyboard(
 
 function buildTelegramProjectSessionsHtml(
   project: TelegramProjectChoice,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return formatTelegramInformationHeading(
     "📁",
-    `${formatTelegramPathLabel(project.cwd)} — tap a session to switch`,
+    t(locale, "sessions.projectTapToSwitch", {
+      path: formatTelegramPathLabel(project.cwd),
+    }),
   );
 }
 
 function buildTelegramProjectSessionsKeyboard(
   surface: TelegramSessionSurface,
   project: TelegramProjectChoice,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramCompactConfirmationReplyMarkup {
   const rows = project.sessionIndexes
     .map((index) => surface.sessions[index - 1])
@@ -1757,7 +1767,7 @@ function buildTelegramProjectSessionsKeyboard(
         callback_data: `tgsess:s:${choice.index}`,
       },
     ]);
-  rows.push([{ text: "⬅️ Projects", callback_data: "tgsess:b" }]);
+  rows.push([{ text: t(locale, "sessions.backToProjects"), callback_data: "tgsess:b" }]);
   return { inline_keyboard: rows };
 }
 
@@ -1769,7 +1779,7 @@ export async function handleTelegramSessionsCallback(
   const chatId = query.message?.chat?.id;
   const messageId = query.message?.message_id;
   if (typeof chatId !== "number" || typeof messageId !== "number") {
-    await deps.answerCallbackQuery(query.id, "⌛ Session list expired.");
+    await deps.answerCallbackQuery(query.id, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.expired"));
     return true;
   }
   const threadId = query.message?.message_thread_id;
@@ -1780,7 +1790,7 @@ export async function handleTelegramSessionsCallback(
     if (!surface) {
       await deps.answerCallbackQuery(
         query.id,
-        "⌛ Session list expired. Send /sessions again.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.expiredSendAgain"),
       );
       return true;
     }
@@ -1789,7 +1799,7 @@ export async function handleTelegramSessionsCallback(
       await deps.editInteractiveMessage(
         chatId,
         messageId,
-        buildTelegramProjectListHtml(),
+        buildTelegramProjectListHtml((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE)),
         "html",
         buildTelegramProjectKeyboard(surface),
       );
@@ -1800,7 +1810,7 @@ export async function handleTelegramSessionsCallback(
       await deps.editInteractiveMessage(
         chatId,
         messageId,
-        "<b>⚠️ Project list expired. Send /sessions again.</b>",
+        `<b>${t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.projectExpired")}</b>`,
         "html",
         { inline_keyboard: [] },
       );
@@ -1809,9 +1819,9 @@ export async function handleTelegramSessionsCallback(
     await deps.editInteractiveMessage(
       chatId,
       messageId,
-      buildTelegramProjectSessionsHtml(project),
+      buildTelegramProjectSessionsHtml(project, (deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE)),
       "html",
-      buildTelegramProjectSessionsKeyboard(surface, project),
+      buildTelegramProjectSessionsKeyboard(surface, project, (deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE)),
     );
     return true;
   }
@@ -1819,14 +1829,14 @@ export async function handleTelegramSessionsCallback(
   if (!choice) {
     await deps.answerCallbackQuery(
       query.id,
-      "⌛ Session list expired. Send /sessions again.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.expiredSendAgain"),
     );
     return true;
   }
   if (!deps.requestSwitchSession) {
     await deps.answerCallbackQuery(
       query.id,
-      "🚫 Session switching is unavailable.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.switchUnavailable"),
     );
     return true;
   }
@@ -1834,7 +1844,7 @@ export async function handleTelegramSessionsCallback(
   await deps.editInteractiveMessage(
     chatId,
     messageId,
-    `<b>🔀 Switching to ${escapeHtml(choice.shortLabel)}…</b>`,
+    `<b>${t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.switchingTo", { label: escapeHtml(choice.shortLabel) })}</b>`,
     "html",
     { inline_keyboard: [] },
   );
@@ -1848,7 +1858,7 @@ export async function handleTelegramSessionsCallback(
     await deps.editInteractiveMessage(
       chatId,
       messageId,
-      "<b>⚠️ Could not start the session switch. Try again.</b>",
+      `<b>${t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sessions.switchStartFailed")}</b>`,
       "html",
       { inline_keyboard: [] },
     );
@@ -2204,6 +2214,7 @@ export function createTelegramCommandHandlerTargetRuntime<
     compact: deps.compact,
     requestNewSession: deps.requestNewSession,
     requestSwitchSession: deps.requestSwitchSession,
+    getLocale: deps.getLocale,
     sendInteractiveMessage: deps.sendInteractiveMessage,
     enqueueControlItem: commandTargetRuntime.enqueueControlItem,
     showStatus: commandTargetRuntime.showStatus,
@@ -2534,7 +2545,7 @@ async function handleTelegramCommandRuntime<
         const sessions = (await listAllTelegramSessions()).slice(0, 100);
         if (sessions.length === 0) {
           await sendReplyFor(nextMessage)(
-            formatTelegramInformationHeading("📭", "No Pi sessions found."),
+            formatTelegramInformationHeading("📭", t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "sessions.none")),
             { parseMode: "HTML" },
           );
           return;
@@ -2543,7 +2554,7 @@ async function handleTelegramCommandRuntime<
         if (deps.sendInteractiveMessage) {
           await deps.sendInteractiveMessage(
             target.chatId,
-            buildTelegramProjectListHtml(),
+            buildTelegramProjectListHtml((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE)),
             "html",
             buildTelegramProjectKeyboard(surface),
             target.threadId !== undefined
@@ -2555,9 +2566,9 @@ async function handleTelegramCommandRuntime<
         await sendReplyFor(nextMessage)(
           formatTelegramInformationHeading(
             "📚",
-            "Recent sessions (send /sessions <number> to switch)",
+            t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "sessions.recentSessions"),
           ) +
-            `\n\n${formatTelegramSessionList(sessions)}`,
+            `\n\n${formatTelegramSessionList(sessions, (deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE))}`,
           { parseMode: "HTML" },
         );
       },
@@ -2788,6 +2799,8 @@ export function createTelegramSessionReplacementSettlementRuntime<TContext>(deps
 export interface TelegramSessionActionAssemblyDeps {
   registerCommand: Pi.ExtensionAPI["registerCommand"];
   sendUserMessage: Pi.ExtensionAPI["sendUserMessage"];
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   store: {
     load: () => Promise<void>;
     refresh?: () => Promise<void>;
@@ -2826,6 +2839,8 @@ export function createTelegramSessionActionAssembly(
   settlement: { onSessionStart: (ctx: Pi.ExtensionContext) => void };
 } {
   const now = deps.now ?? Date.now;
+  const locale = (): TelegramLocale =>
+    deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE;
   const report = (error: unknown): void => deps.recordRuntimeEvent?.("new-session", error);
   const sendTerminalResult = async (
     target: { chatId: number; threadId?: number },
@@ -2833,12 +2848,12 @@ export function createTelegramSessionActionAssembly(
     kind: "new" | "switch" = "new",
   ): Promise<void> => {
     const text = kind === "switch"
-      ? result === "success" ? "<b>🔀 Session switched.</b>"
-        : result === "cancelled" ? "<b>🚫 Session switch cancelled.</b>"
-        : "<b>⚠️ Session switch failed.</b>"
-      : result === "success" ? "<b>🆕 New session started.</b>"
-        : result === "cancelled" ? "<b>🚫 New session cancelled.</b>"
-        : "<b>⚠️ New session failed.</b>";
+      ? result === "success" ? `<b>${t(locale(), "commands.sessionSwitched")}</b>`
+        : result === "cancelled" ? `<b>${t(locale(), "commands.sessionSwitchCancelled")}</b>`
+        : `<b>${t(locale(), "commands.sessionSwitchFailed")}</b>`
+      : result === "success" ? `<b>${t(locale(), "commands.newSessionStarted")}</b>`
+        : result === "cancelled" ? `<b>${t(locale(), "commands.newSessionCancelled")}</b>`
+        : `<b>${t(locale(), "commands.newSessionFailed")}</b>`;
     const deadline = now() + 10_000;
     do {
       const delivery = await deps.sendResult(target, text);

@@ -16,6 +16,7 @@ import {
   type TelegramModelMenuStateBuilderDeps,
   type TelegramReplyMarkup,
 } from "./menu-model.ts";
+import type { TelegramLocale } from "./i18n.ts";
 import {
   handleTelegramStatusMenuCallbackAction,
   openTelegramStatusMenu,
@@ -165,6 +166,8 @@ export interface TelegramMenuCallbackRuntimeDeps<
   TContext,
   TModel extends MenuModel = MenuModel,
 > {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   getStoredModelMenuState: (
     messageId: number | undefined,
     chatId?: number,
@@ -423,6 +426,8 @@ export interface TelegramMenuCallbackRuntimeAdapterDeps<
   TContext,
   TModel extends MenuModel = MenuModel,
 > {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   getStoredModelMenuState: (
     messageId: number | undefined,
     chatId?: number,
@@ -599,6 +604,7 @@ export async function handleTelegramMenuCallbackRuntime<
             {
               answerCallbackQuery: deps.answerCallbackQuery,
               target,
+              getLocale: deps.getLocale,
               editInteractiveMessage:
                 deps.editInteractiveMessage ?? (async () => {}),
               sendInteractiveMessage:
@@ -653,6 +659,7 @@ export async function handleTelegramMenuCallbackRuntime<
             {
               answerCallbackQuery: deps.answerCallbackQuery,
               target,
+              getLocale: deps.getLocale,
               editInteractiveMessage:
                 deps.editInteractiveMessage ?? (async () => {}),
               sendInteractiveMessage:

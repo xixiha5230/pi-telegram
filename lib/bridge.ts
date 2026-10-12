@@ -257,6 +257,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
           delivery.reason === "transport-retryable" };
     },
     handoffTtlMs: Threads.TELEGRAM_LEADER_SESSION_HANDOFF_TTL_MS,
+    getLocale: configStore.getLocale,
     recordRuntimeEvent,
   });
   const sessionActionsRuntime = sessionActionAssembly.action;
@@ -1016,6 +1017,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     Commands.createTelegramThreadDisplayNameResetBinding();
   const inboundRouteRuntime = Routing.createTelegramInboundRouteRuntime({
     configStore,
+    getLocale: configStore.getLocale,
     callApi: callTelegramApi,
     getCurrentInstanceId() {
       return telegramInstanceId;

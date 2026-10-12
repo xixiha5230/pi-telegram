@@ -330,6 +330,7 @@ export function createTelegramDaemon(
       supervisor
         ? supervisor.startPath(path)
         : { ok: false, message: "Managed workers are unavailable." },
+    getLocale: core.ports.configStore.getLocale,
   });
   const escapeHtml = (value: string): string =>
     value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");

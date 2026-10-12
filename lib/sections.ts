@@ -9,6 +9,11 @@ import {
   type TelegramInlineKeyboardMarkup,
 } from "./keyboard.ts";
 import type { TelegramInputRichMessage } from "./telegram-api.ts";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
 
 const SECTION_REGISTRY_KEY = "__piTelegramSectionRegistry__";
 
@@ -148,6 +153,8 @@ export interface TelegramSectionTarget {
 /** @internal */
 export interface TelegramSectionRuntimeDeps {
   answerCallbackQuery: (id: string, text?: string) => Promise<void>;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   target?: TelegramSectionTarget;
   editInteractiveMessage: (
     chatId: number,
@@ -180,7 +187,7 @@ function buildTelegramSectionContext(
   callbackQueryId: string | undefined,
   deps: TelegramSectionRuntimeDeps,
   backCallback = "menu:back",
-  backLabel = "⬆️ Main menu",
+  backLabel = t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "common.mainMenu"),
 ): TelegramSectionContext {
   return {
     sectionId,
@@ -236,7 +243,7 @@ function buildTelegramSectionCallbackContext(
   callbackQueryId: string,
   deps: TelegramSectionRuntimeDeps,
   backCallback = "menu:back",
-  backLabel = "⬆️ Back",
+  backLabel = t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "common.back"),
 ): TelegramSectionCallbackContext {
   return {
     sectionId,
@@ -531,6 +538,8 @@ export function parseTelegramSectionCallback(
 /** @internal */
 export interface TelegramSectionCallbackHandlerDeps {
   answerCallbackQuery: (id: string, text?: string) => Promise<void>;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   target?: TelegramSectionTarget;
   editInteractiveMessage: (
     chatId: number,
@@ -586,7 +595,7 @@ export async function handleTelegramSectionOpen(
       replyMarkup: prependBackRow(
         view.replyMarkup,
         "menu:back",
-        "⬆️ Main menu",
+        t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "common.mainMenu"),
       ),
     };
     await deps.editInteractiveMessage(

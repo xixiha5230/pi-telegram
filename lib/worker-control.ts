@@ -91,9 +91,6 @@ function escapeTelegramHtml(text: string): string {
 }
 
 const NOTICE_NO_WORKERS = "📭 **No live Pi workers.**";
-const NOTICE_UNKNOWN_WORKER = "⚠️ **Unknown Pi worker.**";
-const NOTICE_MANAGED_UNAVAILABLE =
-  "🚫 **Managed Pi workers are unavailable.**";
 
 /** Callback verbs shared by the daemon menu and the directory picker. */
 export const TELEGRAM_WORKER_MENU_CALLBACKS = {
@@ -260,18 +257,18 @@ export function createTelegramWorkerControl(
       ]);
       inline_keyboard.push([
         {
-          text: "🛑 Stop",
+          text: t(locale(), "daemon.stop"),
           callback_data: `${TELEGRAM_WORKER_MENU_CALLBACKS.stopAsk}${worker.workerId}`,
         },
         {
-          text: "♻️ Restart",
+          text: t(locale(), "daemon.restart"),
           callback_data: `${TELEGRAM_WORKER_MENU_CALLBACKS.restart}${worker.workerId}`,
         },
       ]);
     }
     inline_keyboard.push([
-      { text: "📁 New worker…", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.newWorker },
-      { text: "↩️ Menu", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu },
+      { text: t(locale(), "daemon.newWorker"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.newWorker },
+      { text: t(locale(), "daemon.menu"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu },
     ]);
     return { inline_keyboard };
   };
@@ -291,10 +288,14 @@ export function createTelegramWorkerControl(
 
   const cleanupHtml = (note?: string): string =>
     [
-      "🧹 <b>Inactive Threads:</b>",
-      `<i>Deleting this instance's tab on graceful quit is ${cleanupEnabled() ? "on" : "off"}.</i>`,
-      `<i>Deleting proven inactive tabs unattended is ${unattendedEnabled() ? "on" : "off"}; only tabs idle for over 24h qualify.</i>`,
-      "<i>Review only proves which tabs are inactive; deleting needs an explicit tap or the unattended switch.</i>",
+      `<b>${t(locale(), "daemon.cleanup.title")}:</b>`,
+      `<i>${t(locale(), "daemon.cleanup.line1", {
+        state: cleanupEnabled() ? t(locale(), "common.on") : t(locale(), "common.off"),
+      })}</i>`,
+      `<i>${t(locale(), "daemon.cleanup.line2", {
+        state: unattendedEnabled() ? t(locale(), "common.on") : t(locale(), "common.off"),
+      })}</i>`,
+      `<i>${t(locale(), "daemon.cleanup.line3")}</i>`,
       ...(note ? [`<i>${escapeTelegramHtml(note)}</i>`] : []),
     ].join("\n");
 
@@ -304,37 +305,33 @@ export function createTelegramWorkerControl(
     inline_keyboard: [
       [
         {
-          text: "🔍 Review inactive",
+          text: t(locale(), "daemon.cleanup.reviewInactive"),
           callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanupReview,
         },
       ],
       ...(pendingOperationId && deps.cleanup?.deleteEligible
         ? [[
             {
-              text: "🗑 Delete reviewed",
+              text: t(locale(), "daemon.cleanup.deleteReviewed"),
               callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanupDelete,
             },
           ]]
         : []),
       [
         {
-          text: cleanupEnabled()
-            ? "🟢 Delete tab on quit"
-            : "⚫ Delete tab on quit",
+          text: `${cleanupEnabled() ? "🟢" : "⚫"} ${t(locale(), "daemon.cleanup.deleteOnQuit")}`,
           callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanupToggle,
         },
       ],
       ...(supportsUnattended()
         ? [[
             {
-              text: unattendedEnabled()
-                ? "🟢 Unattended cleanup"
-                : "⚫ Unattended cleanup",
+              text: `${unattendedEnabled() ? "🟢" : "⚫"} ${t(locale(), "daemon.cleanup.unattended")}`,
               callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanupUnattendedToggle,
             },
           ]]
         : []),
-      [{ text: "↩️ Menu", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu }],
+      [{ text: t(locale(), "daemon.menu"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu }],
     ],
   });
 
@@ -382,36 +379,36 @@ export function createTelegramWorkerControl(
           keyboard: menuKeyboard(),
         };
       case "status":
-        if (!deps.renderStatus) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+        if (!deps.renderStatus) return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         return { ok: true, html: deps.renderStatus(), keyboard: backToMenu() };
       case "cleanup":
-        if (!deps.cleanup) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+        if (!deps.cleanup) return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         return cleanupLayer();
       case "cleanupReview": {
-        if (!deps.cleanup) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+        if (!deps.cleanup) return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         try {
           const review = await deps.cleanup.review();
           if (review.count === 0) {
-            return { ...cleanupLayer(), alert: "No proven inactive tabs." };
+            return { ...cleanupLayer(), alert: t(locale(), "daemon.notice.noInactive") };
           }
           return {
             ...cleanupLayer(
-              `Review prepared ${review.count} proven inactive tab(s). Nothing was deleted.`,
+              t(locale(), "daemon.notice.reviewPrepared", { count: review.count }),
               review.operationId,
             ),
-            alert: `${review.count} proven inactive tab(s); nothing was deleted.`,
+            alert: t(locale(), "daemon.notice.reviewAlert", { count: review.count }),
           };
         } catch {
           return {
             ...cleanupLayer(),
             ok: false,
-            alert: "Could not safely review inactive tabs.",
+            alert: t(locale(), "daemon.notice.reviewFailed"),
           };
         }
       }
       case "cleanupUnattendedToggle": {
         if (!deps.cleanup?.setUnattendedCleanup) {
-          return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+          return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         }
         const next = !unattendedEnabled();
         try {
@@ -420,39 +417,39 @@ export function createTelegramWorkerControl(
           return {
             ...cleanupLayer(),
             ok: false,
-            alert: "Could not change the unattended cleanup setting.",
+            alert: t(locale(), "daemon.notice.unattendedFailed"),
           };
         }
         return {
           ...cleanupLayer(),
           alert: next
-            ? "Provably inactive tabs now delete unattended."
-            : "Unattended deletion is off.",
+            ? t(locale(), "daemon.notice.unattendedOn")
+            : t(locale(), "daemon.notice.unattendedOff"),
         };
       }
       case "cleanupDelete": {
         if (!deps.cleanup?.deleteEligible) {
-          return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+          return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         }
         try {
           const result = await deps.cleanup.deleteEligible();
           return {
             ...cleanupLayer(
-              `Deleted ${result.deleted} tab(s); ${result.blocked} stayed blocked.`,
+              t(locale(), "daemon.notice.deleted", { deleted: result.deleted, blocked: result.blocked }),
             ),
             ok: result.blocked === 0,
-            alert: `Deleted ${result.deleted}; blocked ${result.blocked}.`,
+            alert: t(locale(), "daemon.notice.deletedAlert", { deleted: result.deleted, blocked: result.blocked }),
           };
         } catch {
           return {
             ...cleanupLayer(),
             ok: false,
-            alert: "Could not safely delete the reviewed tabs.",
+            alert: t(locale(), "daemon.notice.deleteFailed"),
           };
         }
       }
       case "cleanupToggle": {
-        if (!deps.cleanup) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+        if (!deps.cleanup) return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         const next = !cleanupEnabled();
         try {
           await deps.cleanup.setAutomaticCleanup(next);
@@ -460,26 +457,26 @@ export function createTelegramWorkerControl(
           return {
             ...cleanupLayer(),
             ok: false,
-            alert: "Could not change the cleanup setting.",
+            alert: t(locale(), "daemon.notice.cleanupFailed"),
           };
         }
         return {
           ...cleanupLayer(),
-          alert: next ? "Tabs delete on graceful quit." : "Tabs are preserved on quit.",
+          alert: next ? t(locale(), "daemon.notice.cleanupOn") : t(locale(), "daemon.notice.cleanupOff"),
         };
       }
       case "list":
         return rosterLayer();
       case "browse":
-        if (!deps.browse) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+        if (!deps.browse) return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         return deps.browse(command.path);
       case "attach": {
         const worker = deps.workers.get(command.workerId);
-        if (!worker) return { ok: false, html: NOTICE_UNKNOWN_WORKER };
+        if (!worker) return { ok: false, html: t(locale(), "daemon.unknownWorker") };
         if (!deps.control?.attach) {
           return {
             ok: false,
-            html: "⚠️ **Thread attachment is unavailable in this topology.**",
+            html: t(locale(), "daemon.notice.attachUnavailable"),
           };
         }
         const result = await deps.control.attach({
@@ -489,41 +486,41 @@ export function createTelegramWorkerControl(
         if (!result.ok) {
           return {
             ok: false,
-            html: `⚠️ **Could not attach the Pi worker.**\n<i>${escapeTelegramHtml(result.message)}</i>`,
+            html: `${t(locale(), "daemon.notice.attachFailed")}\n<i>${escapeTelegramHtml(result.message)}</i>`,
           };
         }
         return {
           ok: true,
-          html: `✅ **Attached this thread to <code>${escapeTelegramHtml(worker.workerId)}</code>.**`,
+          html: t(locale(), "daemon.notice.attached", { worker: escapeTelegramHtml(worker.workerId) }),
         };
       }
       case "detach": {
         if (!deps.control?.detach) {
-          return { ok: true, html: "ℹ️ **This thread had no Pi worker.**" };
+          return { ok: true, html: t(locale(), "daemon.notice.noWorker") };
         }
         const result = await deps.control.detach({ target: context.target });
         return result.ok
-          ? { ok: true, html: "✅ **Detached this thread.**" }
+          ? { ok: true, html: t(locale(), "daemon.notice.detached") }
           : { ok: true, html: `ℹ️ **${escapeTelegramHtml(result.message)}**` };
       }
       case "stopAsk": {
         const worker = deps.workers.get(command.workerId);
-        if (!worker) return { ok: false, html: NOTICE_UNKNOWN_WORKER };
+        if (!worker) return { ok: false, html: t(locale(), "daemon.unknownWorker") };
         const label = escapeTelegramHtml(resolveTelegramWorkerLabel(worker));
         return {
           ok: true,
-          html: `🛑 <b>Stop ${label}?</b>\n<i>Its Telegram Thread stays; the worker process ends.</i>`,
+          html: `<b>${t(locale(), "daemon.stop.confirmTitle", { label })}</b>\n<i>${t(locale(), "daemon.stop.confirmBody")}</i>`,
           keyboard: {
             inline_keyboard: [
               [
                 {
-                  text: "🛑 Stop",
+                  text: t(locale(), "daemon.stop"),
                   callback_data: `${TELEGRAM_WORKER_MENU_CALLBACKS.stop}${worker.workerId}`,
                 },
               ],
               [
                 {
-                  text: "↩️ Back",
+                  text: t(locale(), "daemon.back"),
                   callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.backToRoster,
                 },
               ],
@@ -536,12 +533,12 @@ export function createTelegramWorkerControl(
       case "restart":
       case "logs": {
         if (!deps.control) {
-          return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+          return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         }
         // A stale button for a worker that already left reports that plainly instead
         // of asking the supervisor to act on an unknown target.
         if (command.kind !== "start" && !deps.workers.get(command.workerId)) {
-          return { ok: false, html: NOTICE_UNKNOWN_WORKER };
+          return { ok: false, html: t(locale(), "daemon.unknownWorker") };
         }
         if (command.kind === "start") {
           const result = await deps.control.start(command.spec);
@@ -558,7 +555,7 @@ export function createTelegramWorkerControl(
           return { ...rosterLayer(), ok: result.ok, alert: result.message };
         }
         if (!deps.control.logs) {
-          return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
+          return { ok: false, html: t(locale(), "daemon.managedUnavailable") };
         }
         const result = await deps.control.logs(command.workerId);
         return { ok: result.ok, html: escapeTelegramHtml(result.message) };

@@ -9,6 +9,7 @@ import {
   type ExtensionCommandContext,
   type SessionInfo,
 } from "./pi.ts";
+import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
 
 export interface TelegramProjectSessionSummary {
   path: string;
@@ -118,13 +119,14 @@ export function formatTelegramPathLabel(cwd: string): string {
 
 export function formatTelegramSessionList(
   sessions: readonly TelegramProjectSessionSummary[],
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return sessions
     .map((session, index) => {
       const title =
-        session.name ?? truncate(session.firstMessage || "(empty session)");
-      const project = session.cwd.length > 0 ? session.cwd : UNKNOWN_CWD_LABEL;
-      return `${index + 1}. ${escapeTelegramHtml(title)}\n    ${escapeTelegramHtml(project)} · ${session.messageCount} msgs · ${formatRelativeTime(session.modifiedMs)}`;
+        session.name ?? truncate(session.firstMessage || t(locale, "sessions.empty"));
+      const project = session.cwd.length > 0 ? session.cwd : t(locale, "sessions.unknownDir");
+      return `${index + 1}. ${escapeTelegramHtml(title)}\n    ${escapeTelegramHtml(project)} · ${session.messageCount} ${t(locale, "sessions.msgs")} · ${formatRelativeTime(session.modifiedMs, Date.now(), locale)}`;
     })
     .join("\n");
 }
@@ -194,16 +196,20 @@ export async function listAllTelegramSessions(): Promise<
   return infos.map(summarizeSession).sort((a, b) => b.modifiedMs - a.modifiedMs);
 }
 
-export function formatRelativeTime(ms: number, nowMs = Date.now()): string {
+export function formatRelativeTime(
+  ms: number,
+  nowMs = Date.now(),
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
   const delta = nowMs - ms;
-  if (!Number.isFinite(delta) || delta < 0) return "just now";
+  if (!Number.isFinite(delta) || delta < 0) return t(locale, "sessions.justNow");
   const minutes = Math.floor(delta / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t(locale, "sessions.justNow");
+  if (minutes < 60) return t(locale, "sessions.minutesAgo", { n: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t(locale, "sessions.hoursAgo", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return t(locale, "sessions.daysAgo", { n: days });
   return new Date(ms).toISOString().slice(0, 10);
 }
 
@@ -222,16 +228,19 @@ function escapeTelegramHtml(text: string): string {
 function formatSessionChoice(
   session: TelegramProjectSessionSummary,
   index: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
-  const title = session.name ?? truncate(session.firstMessage || "(empty session)");
-  return `${index + 1}. ${title} · ${session.messageCount} msgs · ${formatRelativeTime(session.modifiedMs)}`;
+  const title =
+    session.name ?? truncate(session.firstMessage || t(locale, "sessions.empty"));
+  return `${index + 1}. ${title} · ${session.messageCount} ${t(locale, "sessions.msgs")} · ${formatRelativeTime(session.modifiedMs, Date.now(), locale)}`;
 }
 
 function formatProjectChoice(
   project: TelegramProjectSummary,
   index: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
-  return `${index + 1}. ${project.cwd} · ${project.sessionCount} sessions · ${formatRelativeTime(project.latestModifiedMs)}`;
+  return `${index + 1}. ${project.cwd} · ${project.sessionCount} ${t(locale, "sessions.count")} · ${formatRelativeTime(project.latestModifiedMs, Date.now(), locale)}`;
 }
 
 export async function switchTelegramSession(

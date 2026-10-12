@@ -5,7 +5,7 @@
  */
 
 import type { TelegramInlineKeyboardMarkup } from "./keyboard.ts";
-import { TELEGRAM_DEFAULT_LOCALE, type TelegramLocale } from "./i18n.ts";
+import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
 import { buildTelegramMainMenuRow, telegramUiTranslator } from "./ui.ts";
 import type { TelegramModelMenuState } from "./menu.ts";
 import type { MenuModel } from "./model.ts";
@@ -14,21 +14,20 @@ import * as Queue from "./queue.ts";
 // --- Queue Menu ---
 
 const QUEUE_ITEM_PROMPT_HTML_LIMIT = 3600;
-const QUEUE_ITEM_PROMPT_TRUNCATION_SUFFIX = "\n… [truncated]";
-const EMPTY_QUEUE_REFRESH_TITLES = [
-  "<b>⌛ Queue is still empty</b>",
-  "<b>🫙 Still nothing in queue</b>",
-  "<b>🍃 Queue remains empty</b>",
-  "<b>🕳 Nothing queued yet</b>",
-  "<b>🦗 Queue crickets continue</b>",
-  "<b>🌙 Queue is peacefully idle</b>",
-  "<b>🧘 Nothing waiting. Very zen</b>",
-  "<b>🪐 Queue orbit is clear</b>",
-  "<b>🧺 Basket is empty</b>",
-  "<b>🔭 No prompts on the horizon</b>",
-  "<b>🫧 Queue bubbles: none</b>",
-  "<b>🛸 No queued signals detected</b>",
-] as const;
+const EMPTY_QUEUE_REFRESH_TITLE_KEYS = [
+  "queue.empty.0",
+  "queue.empty.1",
+  "queue.empty.2",
+  "queue.empty.3",
+  "queue.empty.4",
+  "queue.empty.5",
+  "queue.empty.6",
+  "queue.empty.7",
+  "queue.empty.8",
+  "queue.empty.9",
+  "queue.empty.10",
+  "queue.empty.11",
+] as const satisfies readonly import("./i18n.ts").TelegramMessageKey[];
 type TelegramQueueMenuReplyMarkup = TelegramInlineKeyboardMarkup;
 interface TelegramQueueMenuItem {
   chatId: number;
@@ -86,12 +85,12 @@ function buildTelegramQueueMenuReplyMarkup(
 ): TelegramQueueMenuReplyMarkup {
   const backRow = [buildTelegramMainMenuRow(telegramUiTranslator(locale))];
   const nextEmptyRefreshIndex =
-    (emptyRefreshIndex + 1) % EMPTY_QUEUE_REFRESH_TITLES.length;
+    (emptyRefreshIndex + 1) % EMPTY_QUEUE_REFRESH_TITLE_KEYS.length;
   const refreshData =
     items.length === 0
       ? `queue:refresh:${nextEmptyRefreshIndex}`
       : "queue:refresh";
-  const refreshRow = [{ text: "🔄 Refresh", callback_data: refreshData }];
+  const refreshRow = [{ text: t(locale, "queue.refresh"), callback_data: refreshData }];
   if (items.length === 0) return { inline_keyboard: [backRow, refreshRow] };
   const rows = items.map((item) => {
     const prefix = item.reactionSuppressionEmoji
@@ -147,9 +146,12 @@ function escapeTelegramQueueMenuHtml(text: string): string {
   return Array.from(text).map(escapeTelegramQueueMenuHtmlChar).join("");
 }
 
-function escapeTelegramQueueMenuHtmlPreview(text: string): string {
+function escapeTelegramQueueMenuHtmlPreview(
+  text: string,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
   const suffix = escapeTelegramQueueMenuHtml(
-    QUEUE_ITEM_PROMPT_TRUNCATION_SUFFIX,
+    `\n${t(locale, "queue.truncated")}`,
   );
   let escaped = "";
   let truncated = false;
@@ -167,7 +169,10 @@ function escapeTelegramQueueMenuHtmlPreview(text: string): string {
   return truncated ? escaped + suffix : escaped;
 }
 
-function getTelegramQueueMenuItemText(item: TelegramQueueMenuItem): string {
+function getTelegramQueueMenuItemText(
+  item: TelegramQueueMenuItem,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
   const badge = item.reactionSuppressionEmoji
     ? ` ${item.reactionSuppressionEmoji}`
     : item.isPriority
@@ -177,7 +182,7 @@ function getTelegramQueueMenuItemText(item: TelegramQueueMenuItem): string {
     ? `<s>${item.queuePosition}</s>.`
     : `<b>${item.queuePosition}.</b>`;
   const heading = `${position}${badge}`;
-  const preview = `<pre>${escapeTelegramQueueMenuHtmlPreview(item.promptText)}</pre>`;
+  const preview = `<pre>${escapeTelegramQueueMenuHtmlPreview(item.promptText, locale)}</pre>`;
   return `${heading}\n${preview}`;
 }
 
@@ -186,27 +191,32 @@ function buildTelegramQueueItemSubmenuReplyMarkup(
   replyToMessageId: number,
   isPriority: boolean,
   isSkipped: boolean,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramQueueMenuReplyMarkup {
+  const priority = t(locale, "queue.priority");
+  const normal = t(locale, "queue.normal");
+  const keep = t(locale, "queue.keep");
+  const skip = t(locale, "queue.skip");
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "queue:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "queue:list" }],
       [
         {
-          text: isPriority ? "🟡 Priority" : "⚫️ Priority",
+          text: isPriority ? `🟡 ${priority}` : `⚫️ ${priority}`,
           callback_data: `queue:prio-set:${chatId}:${replyToMessageId}:priority`,
         },
         {
-          text: isPriority ? "⚫️ Normal" : "🔵 Normal",
+          text: isPriority ? `⚫️ ${normal}` : `🔵 ${normal}`,
           callback_data: `queue:prio-set:${chatId}:${replyToMessageId}:normal`,
         },
       ],
       [
         {
-          text: isSkipped ? "⚫️ Keep" : "🟢 Keep",
+          text: isSkipped ? `⚫️ ${keep}` : `🟢 ${keep}`,
           callback_data: `queue:skip-set:${chatId}:${replyToMessageId}:keep`,
         },
         {
-          text: isSkipped ? "🔴 Skip" : "⚫️ Skip",
+          text: isSkipped ? `🔴 ${skip}` : `⚫️ ${skip}`,
           callback_data: `queue:skip-set:${chatId}:${replyToMessageId}:skip`,
         },
       ],
@@ -343,12 +353,14 @@ async function handleTelegramQueueMenuCallback<Context>(
 function getTelegramQueueMenuListText(
   items: readonly TelegramQueueMenuItem[],
   emptyRefreshIndex?: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
-  if (items.length > 0) return "<b>⏳ Queue:</b>";
-  if (emptyRefreshIndex === undefined) return "<b>⌛ Queue is empty</b>";
-  return EMPTY_QUEUE_REFRESH_TITLES[
-    emptyRefreshIndex % EMPTY_QUEUE_REFRESH_TITLES.length
+  if (items.length > 0) return `<b>${t(locale, "queue.listTitle")}:</b>`;
+  if (emptyRefreshIndex === undefined) return `<b>${t(locale, "queue.emptyTitle")}</b>`;
+  const key = EMPTY_QUEUE_REFRESH_TITLE_KEYS[
+    emptyRefreshIndex % EMPTY_QUEUE_REFRESH_TITLE_KEYS.length
   ];
+  return `<b>${t(locale, key)}</b>`;
 }
 
 async function updateTelegramQueueMenuList<Context>(
@@ -363,7 +375,7 @@ async function updateTelegramQueueMenuList<Context>(
   await deps.updateQueueMessage(
     replyChatId,
     replyMessageId,
-    getTelegramQueueMenuListText(items, emptyRefreshIndex),
+    getTelegramQueueMenuListText(items, emptyRefreshIndex, deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE),
     buildTelegramQueueMenuReplyMarkup(
       items,
       emptyRefreshIndex,
@@ -408,12 +420,13 @@ async function handleTelegramQueueMenuPick<Context>(
   await deps.updateQueueMessage(
     replyChatId,
     replyMessageId,
-    getTelegramQueueMenuItemText(item),
+    getTelegramQueueMenuItemText(item, deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE),
     buildTelegramQueueItemSubmenuReplyMarkup(
       chatId,
       msgId,
       item.isPriority,
       item.reactionSuppressionEmoji !== undefined,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
     ),
   );
   await deps.answerCallbackQuery(callbackQueryId);
@@ -504,12 +517,13 @@ async function updateTelegramQueueMenuPriority<Context>(
   await deps.updateQueueMessage(
     replyChatId,
     replyMessageId,
-    getTelegramQueueMenuItemText(updated),
+    getTelegramQueueMenuItemText(updated, deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE),
     buildTelegramQueueItemSubmenuReplyMarkup(
       chatId,
       msgId,
       updated.isPriority,
       updated.reactionSuppressionEmoji !== undefined,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
     ),
   );
   await deps.answerCallbackQuery(
@@ -551,12 +565,13 @@ async function handleTelegramQueueMenuSkipSet<Context>(
   await deps.updateQueueMessage(
     replyChatId,
     replyMessageId,
-    getTelegramQueueMenuItemText(updated),
+    getTelegramQueueMenuItemText(updated, deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE),
     buildTelegramQueueItemSubmenuReplyMarkup(
       chatId,
       msgId,
       updated.isPriority,
       updated.reactionSuppressionEmoji !== undefined,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
     ),
   );
   await deps.answerCallbackQuery(callbackQueryId);
@@ -670,7 +685,7 @@ function createOpenQueueMenu<
   ): Promise<void> => {
     const state = await deps.getModelMenuState(chatId, ctx);
     const menuItems = toTelegramQueueMenuItems(deps.getQueuedItems());
-    const text = getTelegramQueueMenuListText(menuItems);
+    const text = getTelegramQueueMenuListText(menuItems, undefined, deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE);
     const messageId = await deps.sendInteractiveMessage(
       chatId,
       replyToMessageId,
@@ -739,7 +754,11 @@ function createQueueMenuCallbackHandler<
       await deps.editInteractiveMessage(
         chatId,
         messageId,
-        getTelegramQueueMenuListText(menuItems),
+        getTelegramQueueMenuListText(
+          menuItems,
+          undefined,
+          deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+        ),
         buildTelegramQueueMenuReplyMarkup(
           menuItems,
           0,

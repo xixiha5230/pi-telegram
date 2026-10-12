@@ -2544,10 +2544,10 @@ test("Settings activity callback persists through the real config store while ag
 test("Settings submenu headings include current values", () => {
   assert.match(
     buildTimeInjectionModeSettingsText("interval"),
-    /^<b>🕒 Time injection mode:<\/b> <code>interval<\/code>/,
+    /^<b>🕒 Time injection:<\/b> <code>interval<\/code>/,
   );
   assert.match(
     buildVoiceReplyModeSettingsText("manual", false),
-    /^<b>👄 Voice reply mode:<\/b> <code>manual<\/code>/,
+    /^<b>👄 Voice reply:<\/b> <code>manual<\/code>/,
   );
 });

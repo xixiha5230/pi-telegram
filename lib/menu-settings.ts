@@ -202,128 +202,143 @@ export function buildTelegramSettingsMenuText(
 export function buildThreadDisplaySettingsText(
   mode: TelegramThreadDisplayMode,
   custom = false,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${THREAD_DISPLAY_SETTINGS_TITLE} <code>${custom ? "custom" : threadDisplayModeLabel(mode)}</code>`,
+    `<b>${t(locale, "settings.threadDisplay")}:</b> <code>${custom ? "custom" : threadDisplayModeLabel(mode)}</code>`,
     "",
-    "Choose how this bot profile labels Telegram tabs and Pi terminal status. Each slot is unique across this bot profile.",
+    t(locale, "settings.threadDisplay.intro"),
     "",
-    "Set a manual name for the current Thread with /name <code>Name</code>.",
+    t(locale, "settings.threadDisplay.nameHint"),
     "",
-    "<code>-</code> <code>letters</code> (default): show the unique slot, such as <b><i>A</i></b> or <b><i>B</i></b>.",
-    "<code>-</code> <code>names</code>: show the generated dictionary name for the slot, such as <b><i>Anchor</i></b> or <b><i>Briar</i></b>.",
-    "<code>-</code> <code>directory-title</code>: humanize the distinguishing directory path, such as <b><i>Api Tools</i></b> or <b><i>Frontend / Extensions A</i></b>.",
-    "<code>-</code> <code>directory-snake</code>: normalize the distinguishing directory path to lowercase, such as <b><i>api_tools</i></b> or <b><i>frontend_extensions_a</i></b>.",
-    "<code>-</code> <code>state</code>: the <code>directory-snake</code> label prefixed with the bound worker\'s live state, such as <b><i>🟢 api_tools</i></b> when ready or <b><i>⏳ api_tools</i></b> while it is working.",
+    t(locale, "settings.threadDisplay.letters"),
+    t(locale, "settings.threadDisplay.names"),
+    t(locale, "settings.threadDisplay.directoryTitle"),
+    t(locale, "settings.threadDisplay.directorySnake"),
+    t(locale, "settings.threadDisplay.state"),
   ].join("\n");
 }
 
 export function buildAutomaticThreadCleanupSettingsText(
   enabled: boolean,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${AUTOMATIC_THREAD_CLEANUP_SETTINGS_TITLE} <code>${enabled ? "on" : "off"}</code>`,
+    `<b>${t(locale, "settings.threadCleanup")}:</b> <code>${enabled ? "on" : "off"}</code>`,
     "",
-    "Delete this Pi instance's Telegram tab when Pi quits normally.",
+    t(locale, "settings.cleanup.intro"),
     "",
-    "<code>-</code> <code>on</code> (default): delete the bound thread and release Telegram authority on graceful quit.",
-    "<code>-</code> <code>off</code>: preserve the tab as a restart hint; manual <code>/telegram disconnect</code> still confirms and deletes it.",
+    t(locale, "settings.cleanup.on"),
+    t(locale, "settings.cleanup.off"),
     "",
-    "Review inactive tabs checks current owner and work evidence. Review never deletes tabs.",
+    t(locale, "settings.cleanup.reviewNote"),
   ].join("\n");
 }
 
-export function buildInactiveThreadReviewText(count: number): string {
-  return [INACTIVE_THREAD_REVIEW_TITLE, "",
-    `${count} proven inactive tab${count === 1 ? "" : "s"}.`,
-    "No tabs were deleted.",
-    "Deletion requires a separate confirmed Clean action.",
+export function buildInactiveThreadReviewText(
+  count: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return [
+    `<b>${t(locale, "settings.review.title")}:</b>`,
+    "",
+    t(locale, "settings.review.count", { count }),
+    t(locale, "settings.review.noDelete"),
+    t(locale, "settings.review.requiresConfirm"),
   ].join("\n");
 }
 
 export function buildInactiveThreadReviewReplyMarkup(
   operationId?: string,
   canCleanInactiveThreads = false,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const validOperationId = typeof operationId === "string" &&
     /^thread-cleanup:[a-f0-9]{32}$/u.test(operationId);
   return { inline_keyboard: [
-    [{ text: "⬆️ Back to Thread cleanup",
+    [{ text: t(locale, "settings.backToCleanup"),
       callback_data: "settings:open:automatic-thread-cleanup" }],
     ...(canCleanInactiveThreads && validOperationId ? [[{
-      text: "🧹 Clean inactive tabs",
+      text: t(locale, "settings.cleanInactive"),
       callback_data: `settings:clean:${operationId}`,
     }]] : []),
   ] };
 }
 
-export function buildDraftPreviewsSettingsText(enabled: boolean): string {
+export function buildDraftPreviewsSettingsText(
+  enabled: boolean,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
   return [
-    `${DRAFT_PREVIEWS_SETTINGS_TITLE} <code>${enabled ? "on" : "off"}</code>`,
+    `<b>${t(locale, "settings.draftPreviews")}:</b> <code>${enabled ? "on" : "off"}</code>`,
     "",
-    "Show live answer drafts while the model is answering.",
+    t(locale, "settings.draftPreviews.intro"),
     "",
-    "<code>-</code> <code>on</code> (default): stream safe Telegram Rich Draft frames before the final answer.",
-    "<code>-</code> <code>off</code>: show native active status, then send one final answer.",
+    t(locale, "settings.draftPreviews.on"),
+    t(locale, "settings.draftPreviews.off"),
   ].join("\n");
 }
 
 export function buildAssistantRenderingSettingsText(
   mode: TelegramAssistantRenderingMode,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${ASSISTANT_RENDERING_SETTINGS_TITLE} <code>${mode}</code>`,
+    `<b>${t(locale, "settings.rendering")}:</b> <code>${mode}</code>`,
     "",
-    "Choose how final assistant Markdown answers are delivered.",
+    t(locale, "settings.rendering.intro"),
     "",
-    "<code>-</code> <code>rich</code> (default): use Telegram Native Rich Markdown.",
-    "<code>-</code> <code>html</code>: use the legacy Markdown-to-HTML renderer.",
+    t(locale, "settings.rendering.rich"),
+    t(locale, "settings.rendering.html"),
   ].join("\n");
 }
 
 export function buildActivityVerbositySettingsText(
   verbosity: TelegramActivityVerbosity,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${ACTIVITY_VERBOSITY_SETTINGS_TITLE} <code>${verbosity}</code>`,
+    `<b>${t(locale, "settings.activity")}:</b> <code>${verbosity}</code>`,
     "",
-    "Choose how much technical model activity Telegram shows.",
+    t(locale, "settings.activity.intro"),
     "",
-    "<code>-</code> <code>quiet</code>: show no thinking or tool traffic.",
-    "<code>-</code> <code>thinking</code>: show persistent collapsed thinking.",
-    "<code>-</code> <code>tools</code>: show persistent Rich tool details.",
-    "<code>-</code> <code>verbose</code> (default): show both thinking and tools.",
+    t(locale, "settings.activity.quiet"),
+    t(locale, "settings.activity.thinking"),
+    t(locale, "settings.activity.tools"),
+    t(locale, "settings.activity.verbose"),
   ].join("\n");
 }
 
 export function buildVoiceReplyModeSettingsText(
   mode: TelegramVoiceReplyMode,
   configured = true,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${VOICE_REPLY_MODE_SETTINGS_TITLE} <code>${getVoiceReplyModeLabel(
+    `<b>${t(locale, "settings.voiceReply")}:</b> <code>${getVoiceReplyModeLabel(
       getVoiceReplyModeSetting(mode, configured),
     )}</code>`,
     "",
-    "Controls when pi-telegram converts assistant text replies into Telegram voice messages.",
+    t(locale, "settings.voiceReply.intro"),
     "",
-    "<code>-</code> <code>manual</code> (default): add no automatic voice context; explicit 'telegram_voice' actions still work.",
-    "<code>-</code> <code>mirror</code>: voice input activates automatic voice delivery; text input follows 'manual' behavior.",
-    "<code>-</code> <code>always</code>: activate automatic voice delivery for every reply.",
+    t(locale, "settings.voiceReply.manual"),
+    t(locale, "settings.voiceReply.mirror"),
+    t(locale, "settings.voiceReply.always"),
   ].join("\n");
 }
 
 export function buildTimeInjectionModeSettingsText(
   mode: TelegramTimeMode,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   return [
-    `${TIME_INJECTION_MODE_SETTINGS_TITLE} <code>${mode}</code>`,
+    `<b>${t(locale, "settings.timeInjection")}:</b> <code>${mode}</code>`,
     "",
-    "Controls whether Telegram-originated prompts include a compact wall-clock [time] line.",
+    t(locale, "settings.timeInjection.intro"),
     "",
-    "<code>-</code> <code>hidden</code>: no time line is added to prompt context.",
-    "<code>-</code> <code>always</code>: add time to every Telegram turn.",
-    "<code>-</code> <code>interval</code> (default): add time at most once per chat interval (1 hour unless configured).",
+    t(locale, "settings.timeInjection.hidden"),
+    t(locale, "settings.timeInjection.always"),
+    t(locale, "settings.timeInjection.interval"),
   ].join("\n");
 }
 
@@ -495,9 +510,10 @@ export function buildLanguageSettingsReplyMarkup(
 export function buildThreadDisplaySettingsReplyMarkup(
   mode: TelegramThreadDisplayMode,
   custom = false,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   return { inline_keyboard: [
-    [{ text: "⬆️ Back", callback_data: "settings:list" }],
+    [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
     ...(["letters", "names", "directory-title", "directory-snake", "state"] as const).map((value) => [{
       text: `${!custom && mode === value ? "🟢 " : ""}${threadDisplayModeLabel(value)}`,
       callback_data: `settings:set:thread-display:${value}`,
@@ -508,22 +524,25 @@ export function buildThreadDisplaySettingsReplyMarkup(
 export function buildAutomaticThreadCleanupSettingsReplyMarkup(
   enabled: boolean,
   canReviewInactiveThreads = false,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
+  const on = t(locale, "settings.toggleOn");
+  const off = t(locale, "settings.toggleOff");
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       [
         {
-          text: enabled ? "🟢 On" : "⚫️ On",
+          text: enabled ? `🟢 ${on}` : `⚫️ ${on}`,
           callback_data: "settings:set:automatic-thread-cleanup:on",
         },
         {
-          text: enabled ? "⚫️ Off" : "🟡 Off",
+          text: enabled ? `⚫️ ${off}` : `🟡 ${off}`,
           callback_data: "settings:set:automatic-thread-cleanup:off",
         },
       ],
       ...(canReviewInactiveThreads ? [[{
-        text: "🔎 Review inactive tabs",
+        text: t(locale, "settings.reviewInactive"),
         callback_data: "settings:review:inactive-threads",
       }]] : []),
     ],
@@ -532,17 +551,20 @@ export function buildAutomaticThreadCleanupSettingsReplyMarkup(
 
 export function buildDraftPreviewsSettingsReplyMarkup(
   enabled: boolean,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
+  const on = t(locale, "settings.toggleOn");
+  const off = t(locale, "settings.toggleOff");
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       [
         {
-          text: enabled ? "🟢 On" : "⚫️ On",
+          text: enabled ? `🟢 ${on}` : `⚫️ ${on}`,
           callback_data: "settings:set:draft-previews:on",
         },
         {
-          text: enabled ? "⚫️ Off" : "🟡 Off",
+          text: enabled ? `⚫️ ${off}` : `🟡 ${off}`,
           callback_data: "settings:set:draft-previews:off",
         },
       ],
@@ -552,11 +574,12 @@ export function buildDraftPreviewsSettingsReplyMarkup(
 
 export function buildAssistantRenderingSettingsReplyMarkup(
   mode: TelegramAssistantRenderingMode,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const modes: TelegramAssistantRenderingMode[] = ["rich", "html"];
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       ...modes.map((value) => [
         {
           text: `${value === mode ? "🟢 " : ""}${value}`,
@@ -569,6 +592,7 @@ export function buildAssistantRenderingSettingsReplyMarkup(
 
 export function buildActivityVerbositySettingsReplyMarkup(
   verbosity: TelegramActivityVerbosity,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const button = (value: TelegramActivityVerbosity) => ({
     text: `${value === verbosity ? "🟢 " : ""}${value}`,
@@ -576,7 +600,7 @@ export function buildActivityVerbositySettingsReplyMarkup(
   });
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       [button("quiet")],
       [button("thinking"), button("tools")],
       [button("verbose")],
@@ -586,11 +610,12 @@ export function buildActivityVerbositySettingsReplyMarkup(
 
 export function buildTimeInjectionModeSettingsReplyMarkup(
   mode: TelegramTimeMode,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const modes: TelegramTimeMode[] = ["hidden", "always", "interval"];
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       ...modes.map((value) => [
         {
           text: `${value === mode ? "🟢 " : ""}${value}`,
@@ -604,12 +629,13 @@ export function buildTimeInjectionModeSettingsReplyMarkup(
 export function buildVoiceReplyModeSettingsReplyMarkup(
   mode: TelegramVoiceReplyMode,
   configured = true,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const activeMode = getVoiceReplyModeSetting(mode, configured);
   const modes: TelegramVoiceReplyMode[] = ["manual", "mirror", "always"];
   return {
     inline_keyboard: [
-      [{ text: "⬆️ Back", callback_data: "settings:list" }],
+      [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
       ...modes.map((value) => [
         {
           text: `${value === activeMode ? "🟢 " : ""}${getVoiceReplyModeLabel(value)}`,
@@ -647,8 +673,12 @@ export async function updateAutomaticThreadCleanupSettingsMessage(
 ): Promise<void> {
   const enabled = deps.isAutomaticThreadCleanupEnabled();
   await deps.updateSettingsMessage(
-    buildAutomaticThreadCleanupSettingsText(enabled),
-    buildAutomaticThreadCleanupSettingsReplyMarkup(enabled, !!deps.reviewInactiveThreads),
+    buildAutomaticThreadCleanupSettingsText(enabled, deps.getLocale?.()),
+    buildAutomaticThreadCleanupSettingsReplyMarkup(
+      enabled,
+      !!deps.reviewInactiveThreads,
+      deps.getLocale?.(),
+    ),
   );
 }
 
@@ -657,8 +687,8 @@ export async function updateDraftPreviewsSettingsMessage(
 ): Promise<void> {
   const enabled = deps.areDraftPreviewsEnabled();
   await deps.updateSettingsMessage(
-    buildDraftPreviewsSettingsText(enabled),
-    buildDraftPreviewsSettingsReplyMarkup(enabled),
+    buildDraftPreviewsSettingsText(enabled, deps.getLocale?.()),
+    buildDraftPreviewsSettingsReplyMarkup(enabled, deps.getLocale?.()),
   );
 }
 
@@ -667,8 +697,8 @@ export async function updateAssistantRenderingSettingsMessage(
 ): Promise<void> {
   const mode = deps.getAssistantRenderingMode();
   await deps.updateSettingsMessage(
-    buildAssistantRenderingSettingsText(mode),
-    buildAssistantRenderingSettingsReplyMarkup(mode),
+    buildAssistantRenderingSettingsText(mode, deps.getLocale?.()),
+    buildAssistantRenderingSettingsReplyMarkup(mode, deps.getLocale?.()),
   );
 }
 
@@ -677,8 +707,8 @@ export async function updateActivityVerbositySettingsMessage(
 ): Promise<void> {
   const verbosity = deps.getActivityVerbosity();
   await deps.updateSettingsMessage(
-    buildActivityVerbositySettingsText(verbosity),
-    buildActivityVerbositySettingsReplyMarkup(verbosity),
+    buildActivityVerbositySettingsText(verbosity, deps.getLocale?.()),
+    buildActivityVerbositySettingsReplyMarkup(verbosity, deps.getLocale?.()),
   );
 }
 
@@ -687,8 +717,8 @@ export async function updateTimeInjectionModeSettingsMessage(
 ): Promise<void> {
   const mode = deps.getTimeInjectionMode();
   await deps.updateSettingsMessage(
-    buildTimeInjectionModeSettingsText(mode),
-    buildTimeInjectionModeSettingsReplyMarkup(mode),
+    buildTimeInjectionModeSettingsText(mode, deps.getLocale?.()),
+    buildTimeInjectionModeSettingsReplyMarkup(mode, deps.getLocale?.()),
   );
 }
 
@@ -698,8 +728,8 @@ export async function updateVoiceReplyModeSettingsMessage(
   const mode = deps.getVoiceReplyMode();
   const configured = deps.isVoiceReplyModeConfigured();
   await deps.updateSettingsMessage(
-    buildVoiceReplyModeSettingsText(mode, configured),
-    buildVoiceReplyModeSettingsReplyMarkup(mode, configured),
+    buildVoiceReplyModeSettingsText(mode, configured, deps.getLocale?.()),
+    buildVoiceReplyModeSettingsReplyMarkup(mode, configured, deps.getLocale?.()),
   );
 }
 
@@ -748,8 +778,16 @@ export async function handleTelegramSettingsMenuCallbackAction(
       return true;
     }
     await deps.updateSettingsMessage(
-      buildThreadDisplaySettingsText(mode, deps.isThreadDisplayCustom?.() ?? false),
-      buildThreadDisplaySettingsReplyMarkup(mode, deps.isThreadDisplayCustom?.() ?? false),
+      buildThreadDisplaySettingsText(
+        mode,
+        deps.isThreadDisplayCustom?.() ?? false,
+        deps.getLocale?.(),
+      ),
+      buildThreadDisplaySettingsReplyMarkup(
+        mode,
+        deps.isThreadDisplayCustom?.() ?? false,
+        deps.getLocale?.(),
+      ),
     );
     await deps.answerCallbackQuery(callbackQueryId);
     return true;
@@ -898,8 +936,14 @@ export async function handleTelegramSettingsMenuCallbackAction(
       if (review.count === 0) {
         await deps.answerCallbackQuery(callbackQueryId, "No proven inactive tabs.");
       } else {
-        await deps.updateSettingsMessage(buildInactiveThreadReviewText(review.count),
-          buildInactiveThreadReviewReplyMarkup(review.operationId, !!deps.cleanInactiveThreads));
+        await deps.updateSettingsMessage(
+          buildInactiveThreadReviewText(review.count, deps.getLocale?.()),
+          buildInactiveThreadReviewReplyMarkup(
+            review.operationId,
+            !!deps.cleanInactiveThreads,
+            deps.getLocale?.(),
+          ),
+        );
         await deps.answerCallbackQuery(callbackQueryId, "Review prepared. No tabs were deleted.");
       }
     } catch {

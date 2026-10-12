@@ -6,6 +6,8 @@
  * browser never holds a Telegram client and never spawns anything itself.
  */
 
+import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
+
 export interface TelegramWorkerInlineKeyboard {
   inline_keyboard: { text: string; callback_data: string }[][];
 }
@@ -32,6 +34,8 @@ export interface TelegramWorkerBrowserPorts {
   maxEntries?: number;
   tokenTtlMs?: number;
   now?: () => number;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
 }
 
 export interface TelegramWorkerDirectoryBrowser {
@@ -43,7 +47,6 @@ export interface TelegramWorkerDirectoryBrowser {
 export const TELEGRAM_WORKER_CALLBACK_PREFIX = "ptw:";
 
 const TOKEN_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
-const NOTICE_EXPIRED = "⌛ **This picker expired. Send /workers browse again.**";
 
 function escapeHtml(text: string): string {
   return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
@@ -53,6 +56,8 @@ export function createTelegramWorkerDirectoryBrowser(
   ports: TelegramWorkerBrowserPorts,
 ): TelegramWorkerDirectoryBrowser {
   const now = ports.now ?? Date.now;
+  const locale = (): TelegramLocale =>
+    ports.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE;
   const maxEntries = ports.maxEntries ?? 30;
   const tokenTtlMs = ports.tokenTtlMs ?? 10 * 60_000;
   const listings = new Map<string, { path: string; entries: string[]; expiresAtMs: number }>();
@@ -75,7 +80,7 @@ export function createTelegramWorkerDirectoryBrowser(
   const renderListing = (listing: TelegramWorkerBrowserListing): TelegramWorkerBrowserReply => {
     const keyboard: { text: string; callback_data: string }[][] = [];
     if (listing.parent !== undefined) {
-      keyboard.push([{ text: "⬆️ ..", callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}u:${listing.token}` }]);
+      keyboard.push([{ text: t(locale(), "daemon.browser.up"), callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}u:${listing.token}` }]);
     }
     const entryRow: { text: string; callback_data: string }[] = [];
     listing.entries.forEach((entry, index) => {
@@ -88,17 +93,17 @@ export function createTelegramWorkerDirectoryBrowser(
       keyboard.push(entryRow.slice(index, index + 2));
     }
     keyboard.push([
-      { text: "✅ Start a worker here", callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}s:${listing.token}` },
+      { text: t(locale(), "daemon.browser.startHere"), callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}s:${listing.token}` },
     ]);
     keyboard.push([
-      { text: "↩️ Back", callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}c` },
+      { text: t(locale(), "daemon.back"), callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}c` },
     ]);
     const body = listing.entries.length
       ? listing.entries.map((entry) => `📁 ${escapeHtml(entry.name)}`).join("\n")
-      : "_No subdirectories._";
+      : t(locale(), "daemon.browser.empty");
     return {
       ok: true,
-      html: `📂 <b>Pick a project directory</b>\n<code>${escapeHtml(listing.path)}</code>\n\n${body}`,
+      html: `<b>${t(locale(), "daemon.browser.title")}</b>\n<code>${escapeHtml(listing.path)}</code>\n\n${body}`,
       keyboard: { inline_keyboard: keyboard },
     };
   };
@@ -108,13 +113,13 @@ export function createTelegramWorkerDirectoryBrowser(
     const requested = path ?? ports.root;
     const resolved = ports.resolveDirectory(requested);
     if (!resolved) {
-      return { ok: false, html: `⚠️ **Not an existing directory:** <code>${escapeHtml(requested)}</code>` };
+      return { ok: false, html: `${t(locale(), "daemon.browser.notDirectory")} <code>${escapeHtml(requested)}</code>` };
     }
     let names: readonly string[];
     try {
       names = ports.listDirectories(resolved);
     } catch {
-      return { ok: false, html: `⚠️ **Cannot read directory:** <code>${escapeHtml(resolved)}</code>` };
+      return { ok: false, html: `${t(locale(), "daemon.browser.cannotRead")} <code>${escapeHtml(resolved)}</code>` };
     }
     const visible = [...names]
       .filter((name) => !name.startsWith("."))
@@ -137,14 +142,14 @@ export function createTelegramWorkerDirectoryBrowser(
   const navigate = (callbackData: string): TelegramWorkerBrowserReply => {
     prune();
     if (!callbackData.startsWith(TELEGRAM_WORKER_CALLBACK_PREFIX)) {
-      return { ok: false, html: "⚠️ **Unknown action.**" };
+      return { ok: false, html: t(locale(), "daemon.browser.unknownAction") };
     }
     const parts = callbackData.slice(TELEGRAM_WORKER_CALLBACK_PREFIX.length).split(":");
     const op = parts[0] ?? "";
     if (op === "b") return open(ports.root);
     const token = parts[1] ?? "";
     const entry = listings.get(token);
-    if (!entry) return { ok: false, html: NOTICE_EXPIRED };
+    if (!entry) return { ok: false, html: t(locale(), "daemon.browser.expired") };
     if (op === "u") {
       const parent = entry.path.replace(/\/[^/]+$/u, "") || "/";
       return open(parent);
@@ -152,7 +157,7 @@ export function createTelegramWorkerDirectoryBrowser(
     if (op === "o") {
       const index = Number.parseInt(parts[2] ?? "", 10);
       const child = Number.isSafeInteger(index) ? entry.entries[index] : undefined;
-      if (!child) return { ok: false, html: NOTICE_EXPIRED };
+      if (!child) return { ok: false, html: t(locale(), "daemon.browser.expired") };
       return open(child);
     }
     if (op === "s") {
@@ -166,7 +171,7 @@ export function createTelegramWorkerDirectoryBrowser(
               inline_keyboard: [
                 [
                   {
-                    text: "↩️ Workers",
+                    text: t(locale(), "daemon.workersBack"),
                     callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}w`,
                   },
                 ],
@@ -175,7 +180,7 @@ export function createTelegramWorkerDirectoryBrowser(
           : undefined,
       };
     }
-    return { ok: false, html: "⚠️ **Unknown action.**" };
+    return { ok: false, html: t(locale(), "daemon.browser.unknownAction") };
   };
 
   return {
@@ -184,8 +189,8 @@ export function createTelegramWorkerDirectoryBrowser(
     keyboardForList: () => ({
       inline_keyboard: [
         [
-          { text: "📁 New worker…", callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}b` },
-          { text: "↩️ Menu", callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}m` },
+          { text: t(locale(), "daemon.newWorker"), callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}b` },
+          { text: t(locale(), "daemon.menu"), callback_data: `${TELEGRAM_WORKER_CALLBACK_PREFIX}m` },
         ],
       ],
     }),

@@ -10,6 +10,7 @@ import * as Bus from "./bus.ts";
 import * as Commands from "./commands.ts";
 import type { TelegramConfigStore } from "./config.ts";
 import type { TelegramInboundHandlerRuntime } from "./inbound.ts";
+import type { TelegramLocale } from "./i18n.ts";
 import * as Media from "./media.ts";
 import * as Menu from "./menu.ts";
 import * as Model from "./model.ts";
@@ -700,6 +701,7 @@ export interface TelegramInboundRouteRuntimeDeps<
   hasPendingMessages: (ctx: TContext) => boolean;
   requestNewSession?: (source: unknown) => void;
   requestSwitchSession?: (source: unknown, sessionPath: string) => void;
+  getLocale?: () => TelegramLocale;
   compact: (
     ctx: TContext,
     callbacks: { onComplete: () => void; onError: (error: unknown) => void },
@@ -1000,6 +1002,7 @@ export function createTelegramInboundRouteRuntime<
     TModel
   >({
     getStoredModelMenuState: deps.modelMenuRuntime.getState,
+    getLocale: deps.getLocale,
     getActiveModel: deps.currentModelRuntime.get,
     getThinkingLevel: deps.getThinkingLevel,
     setThinkingLevel: deps.setThinkingLevel,
@@ -2050,6 +2053,7 @@ export function createTelegramInboundRouteRuntime<
         editInteractiveMessage: deps.editInteractiveMessage ?? (async () => {}),
         requestSwitchSession: deps.requestSwitchSession,
         recordRuntimeEvent: deps.recordRuntimeEvent,
+        getLocale: deps.getLocale,
       });
     assertExecutionCurrent();
     if (handledBySessions) return;
@@ -2240,6 +2244,7 @@ export function createTelegramInboundRouteRuntime<
     compact: deps.compact,
     requestNewSession: deps.requestNewSession,
     requestSwitchSession: deps.requestSwitchSession,
+    getLocale: deps.getLocale,
     allocateItemOrder: deps.bridgeRuntime.queue.allocateItemOrder,
     allocateControlOrder: deps.bridgeRuntime.queue.allocateControlOrder,
     appendControlItem: deps.queueMutationRuntime.append,
