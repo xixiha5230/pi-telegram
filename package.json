@@ -1,6 +1,6 @@
 {
   "name": "@xixiha5230/pi-telegram",
-  "version": "0.53.1",
+  "version": "0.53.2",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -13,9 +13,7 @@
     "bot",
     "extension"
   ],
-  "dependencies": {
-    "@sinclair/typebox": "^0.34.0"
-  },
+  "dependencies": {},
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -120,7 +118,8 @@
   "peerDependencies": {
     "@earendil-works/pi-agent-core": ">=0.84.4",
     "@earendil-works/pi-ai": ">=0.84.4",
-    "@earendil-works/pi-coding-agent": ">=0.84.4"
+    "@earendil-works/pi-coding-agent": ">=0.84.4",
+    "@sinclair/typebox": "*"
   },
   "devDependencies": {
     "@types/node": "latest",

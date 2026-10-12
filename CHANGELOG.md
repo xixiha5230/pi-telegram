@@ -4,9 +4,13 @@
 
 ## Unreleased
 
+## 0.53.2: Self-healing standalone daemon
+
+- `Self-healing standalone daemon`: 0.53.1's `dependencies` move for `@sinclair/typebox` violated the host extension loader's "host-provided packages must be `peerDependencies` with a `*` range" contract (installed copies can bypass the loader and produce duplicate runtime modules). 0.53.2 reverts the package to `peerDependencies: { "@sinclair/typebox": "*" }` and replaces the thin daemon bin with a self-healing bootstrapper: on each start it resolves every declared peer from the installed tree, and when a peer is missing (npm auto-installs can be pruned by a later unrelated `npm install`) it vendors the peer into a daemon-private `~/.pi/agent/tmp/telegram/daemon-vendor/node_modules` and symlinks it into the package's own `node_modules` so the child's ESM resolver finds it. The vendored copy is created at runtime by the separate daemon process, not declared in `package.json`, so the loader's contract stays satisfied.
+
 ## 0.53.1: Daemon lifecycle fixes
 
-- `Standalone daemon dependency fix`: `@sinclair/typebox` moves from peerDependencies to dependencies. `lib/` imports it directly at runtime, and the standalone `pi-telegram-daemon` process (launchd/systemd or `/telegram daemon start`) could not resolve it after a later npm install pruned the auto-installed peer, leaving the daemon crash-looping with `ERR_MODULE_NOT_FOUND`. As a real dependency it is always installed and kept.
+- `Standalone daemon dependency fix (superseded)`: Attempted fix for the standalone `pi-telegram-daemon` losing `@sinclair/typebox` after a later `npm install` pruned the auto-installed peer, which made the daemon crash-loop with `ERR_MODULE_NOT_FOUND`. 0.53.1 moved the package from `peerDependencies` to `dependencies`. The runtime symptom is resolved but the move violates the host extension loader's contract that host-provided packages must be `peerDependencies` with a `*` range (installed copies bypass the loader and create duplicate runtime modules). 0.53.2 reverts the move and adds a self-healing bootstrapper instead.
 - `Daemon command feedback`: `/telegram daemon start` acknowledges immediately, reports the daemon result, then connects this Pi instance to the daemon so Telegram works in one command instead of leaving the earlier daemon-managed warning until the next session start. `status` is now three lines (daemon, autostart path, log path), tolerates a partially reloaded lifecycle, and `stop` says Telegram is unavailable until the daemon restarts.
 
 ## 0.53.0: Unified /telegram command
