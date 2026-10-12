@@ -17,13 +17,13 @@ This repository is an actively maintained standalone fork of [`badlogic/pi-teleg
 From npm:
 
 ```bash
-pi install npm:@llblab/pi-telegram
+pi install npm:@xixiha5230/pi-telegram
 ```
 
 From git:
 
 ```bash
-pi install git:github.com/llblab/pi-telegram
+pi install git:github.com/xixiha5230/pi-telegram
 ```
 
 The 0.21 extension platform requires Pi `0.80.6` or newer. Its Activity API uses the public `agent_settled` lifecycle event to keep retries/continuations under one activity identity and release that identity only after the run fully settles.

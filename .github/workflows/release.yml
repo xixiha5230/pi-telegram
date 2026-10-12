@@ -106,7 +106,7 @@ jobs:
       - name: Resolve npm publication state
         id: npm-state
         env:
-          PACKAGE_NAME: "@llblab/pi-telegram"
+          PACKAGE_NAME: "@xixiha5230/pi-telegram"
           TAG_COMMIT: ${{ steps.preflight.outputs.tag_commit }}
           VERSION: ${{ steps.preflight.outputs.version }}
         run: |
@@ -136,7 +136,7 @@ jobs:
         run: npm publish --access public --provenance
       - name: Verify public npm package and packed manifest
         env:
-          PACKAGE_NAME: "@llblab/pi-telegram"
+          PACKAGE_NAME: "@xixiha5230/pi-telegram"
           TAG_COMMIT: ${{ steps.preflight.outputs.tag_commit }}
           VERSION: ${{ steps.preflight.outputs.version }}
         run: |
