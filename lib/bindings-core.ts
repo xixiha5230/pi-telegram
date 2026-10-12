@@ -2,8 +2,9 @@
  * Telegram bridge core binding runtimes
  * Zones: telegram, orchestration
  * Owns the host-parameterized queue, activity, and agent-message binding runtimes
- * that both the Pi entry and the external daemon compose. It imports no Pi SDK
- * runtime and no schema library, so a daemon host can build these without Pi.
+ * that both the Pi entry and the external daemon compose. It imports no Pi tool
+ * registration and no schema library, so a daemon host loads a smaller graph than
+ * the Pi entry even though both still depend on the Pi SDK.
  */
 
 import * as Activity from "./activity.ts";
