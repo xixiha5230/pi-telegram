@@ -7,7 +7,7 @@
 
 **Approved design direction. Partially implemented.** This document owns the durable contract for an external `pi-telegram-daemon` control plane that can start, stop, and switch live Pi workers from Telegram. It supersedes the in-process-only assumptions of [Telegram Multi-Instance Bus](./multi-instance-bus.md) where they conflict; the bus document remains canonical for the current shipped runtime until this contract is implemented.
 
-P0 (ownership decoupling) has landed in the extension: `cwd` no longer fences transport ownership, a cross-project session switch keeps the same live owner, and `owners.json` retains `cwd` only as a same-directory restart hint. The P1 host boundary, daemon entry, worker/route registries, snapshots, RPC channel, launch planning, control panel, and managed-worker supervisor are implemented. Managed workers currently join the existing authenticated follower bus; their updates use the bridge's existing journaled follower-forwarding path. An additional generation-fenced `leader.workerControl` envelope now routes allowlisted Pi-context operations over that bus, and the real attached receiver/leader routing path is covered by local-socket tests. A real local `pi --mode rpc` `get_state` smoke passed with extensions/network disabled. Managed workers now receive only a daemon-provisioned bot identity digest: their config store exposes no raw token and keys journals, workspace admission, queue transport stamps, and paired-user admission from that digest, while the daemon keeps the raw token for transport. A tokenless attached worker (`PI_TELEGRAM_TOKENLESS_WORKER=1`) reads the daemon-published identity instead of the shared profile token and is forced non-leading. Still incomplete: attached-worker dialog forwarding is not implemented, session/queue controls absent from `ExtensionContext` reject explicitly, and the full Telegram delivery path has not been live-smoked. Managed-worker `select`/`confirm`/`input`/`editor` dialogs do render through a bounded, generation-fenced Telegram bridge. Until those land, [architecture.md](./architecture.md#runtime-ownership) and [AGENTS.md](../AGENTS.md) remain authoritative for the runtime.
+P0 (ownership decoupling) has landed in the extension: `cwd` no longer fences transport ownership, a cross-project session switch keeps the same live owner, and `owners.json` retains `cwd` only as a same-directory restart hint. The P1 host boundary, daemon entry, worker/route registries, snapshots, RPC channel, launch planning, control panel, and managed-worker supervisor are implemented. Managed workers currently join the existing authenticated follower bus; their updates use the bridge's existing journaled follower-forwarding path. An additional generation-fenced `leader.workerControl` envelope now routes allowlisted Pi-context operations over that bus, and the real attached receiver/leader routing path is covered by local-socket tests. A real local `pi --mode rpc` `get_state` smoke passed with extensions/network disabled. Managed workers now receive only a daemon-provisioned bot identity digest: their config store exposes no raw token and keys journals, workspace admission, queue transport stamps, and paired-user admission from that digest, while the daemon keeps the raw token for transport. A tokenless attached worker (`PI_TELEGRAM_TOKENLESS_WORKER=1`) reads the daemon-published identity instead of the shared profile token and is forced non-leading. Managed-worker `select`/`confirm`/`input`/`editor` dialogs render through a bounded, generation-fenced Telegram bridge, and the operator has live-smoked the daemon plus managed-worker Telegram delivery path. Still incomplete: attached-worker dialog forwarding is not implemented, and session/queue controls absent from `ExtensionContext` reject explicitly. [architecture.md](./architecture.md#runtime-ownership) and [AGENTS.md](../AGENTS.md) remain authoritative for the in-process companion runtime.
 
 ## Purpose
 
@@ -69,7 +69,22 @@ The control plane achieves this by separating three identities that the current 
    └────────────────────────┘   └────────────────────────┘
 ```
 
-The daemon is a Node process that reuses the package's transport, journal, routing, rendering, and queue-policy modules. It does not import the Pi extension binding and does not require Pi.
+The daemon is a Node process that reuses the package's transport, journal, routing, rendering, and queue-policy modules. It does not import the Pi extension binding.
+
+### Daemon Dependency Shape
+
+The daemon composes only host-parameterized core runtimes. Pi-facing tool and
+command registration lives in `lib/bindings.ts` and `lib/telegram-tools.ts`, and
+the daemon never imports either as a value; the shared queue, activity, and
+agent-message runtimes live in the schema-free `lib/bindings-core.ts`. As a
+result `@sinclair/typebox`, which only `lib/telegram-tools.ts` needs, is absent
+from the daemon's module graph. The build still copies `@sinclair/typebox` into
+`dist/node_modules` so the built daemon and extension always resolve a schema
+builder even after npm prunes the installed peer; the daemon launcher therefore
+never installs, symlinks, or probes for a missing peer. The daemon does still
+transitively import `@earendil-works/pi-coding-agent` through the shared Pi
+adapter and session browsing, so it runs alongside a host that provides the Pi
+SDK rather than on a Pi-free machine.
 
 ## Identity Model
 
@@ -486,9 +501,9 @@ The change is a control-plane generalization, not a rewrite:
 ## Phasing
 
 - **P0 — Contract and ownership decoupling.** Publish this contract; remove `cwd` from transport ownership; keep standalone behavior working on the shared contracts. Resolves the self-conflict/lockout class.
-- **P1 — External daemon and attached workers.** Landed: daemon transport ownership, registries/snapshots, RPC client, directory picker, control panel, supervisor, and a generation-fenced allowlisted control envelope over the existing follower bus. Remaining: standalone tokenless worker registration, complete daemon-delivery ownership validation, and end-to-end production wiring.
-- **P2 — Managed workers and supervision.** Launch/readiness/resume/fallback/restart/drain/abort/escalation are unit-tested; a real local `pi --mode rpc` `get_state` smoke passed with network and extensions disabled. Remaining: live daemon + managed-worker + Telegram delivery smoke and outcome/receipt verification.
-- **P3 — Unification and hardening.** Token isolation/relocation, attached-worker dialog forwarding, full session/queue control adapter parity, thread re-alignment polish, diagnostics, and redaction review. Managed-worker `select`/`confirm`/`input`/`editor` dialogs now render through the daemon's Telegram UI bridge with generation-fenced callbacks.
+- **P1 — External daemon and attached workers.** Landed: daemon transport ownership, registries/snapshots, RPC client, directory picker, control panel, supervisor, a generation-fenced allowlisted control envelope over the existing follower bus, and tokenless attached registration. An operator-confirmed live smoke covers the daemon plus managed-worker Telegram delivery path.
+- **P2 — Managed workers and supervision.** Launch/readiness/resume/fallback/restart/drain/abort/escalation are unit-tested; a real local `pi --mode rpc` `get_state` smoke passed with network and extensions disabled, and the operator confirmed the end-to-end daemon plus managed-worker delivery path. Remaining: unattended outcome/receipt verification for crash/restart edges.
+- **P3 — Unification and hardening.** Token isolation/relocation and managed-worker dialogs have landed. Remaining: attached-worker dialog forwarding, full session/queue control adapter parity, thread re-alignment polish, diagnostics, and redaction review.
 
 ## Decisions Log
 

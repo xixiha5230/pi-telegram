@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `Standalone daemon dependency split`: Pi-facing tool registration moved into `lib/telegram-tools.ts`, and the shared queue/activity/agent-message runtimes moved into schema-free `lib/bindings-core.ts`. `@sinclair/typebox` is now absent from the daemon's module graph, and the build copies it into `dist/node_modules` so the built daemon and extension always resolve a schema builder after npm prunes the peer. The daemon launcher no longer installs or symlinks a missing peer.
+
 ## 0.53.3: Self-healing standalone daemon
 
 - `Self-healing standalone daemon`: 0.53.2 replaced the thin daemon bin with a bootstrapper that preemptively tried to vendor every declared peer; when the peer was a host-only package the daemon does not import (e.g. `@earendil-works/pi-...`), `npm install` failed, and the daemon exited. 0.53.3 makes the bootstrapper lazy and demand-driven: it attempts the dynamic import of the daemon entry, and only on `ERR_MODULE_NOT_FOUND` for a bare specifier does it vendor that specific peer and retry. On a normal install the import succeeds first try with zero `npm` calls; on a pruned peer it auto-vendors the single missing peer and retries; on a second start with the vendor present it succeeds first try. The vendored copy is still created at runtime by the separate daemon process, not declared in `package.json`, so the host extension loader's contract that host-provided packages must be `peerDependencies` with a `*` range remains satisfied.

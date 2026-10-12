@@ -41,4 +41,15 @@ cpSync(
   join("dist", "lib", "generative-app-worker.mjs"),
 );
 
+// The standalone daemon imports the same bridge modules as the extension, and a
+// few of them build tool schemas with `@sinclair/typebox`. npm may prune that
+// peer after a later install, which previously crashed the daemon. Ship a copy
+// inside `dist/node_modules` so the built daemon and extension always resolve a
+// schema builder without a runtime install, a symlink, or an error-string probe.
+cpSync(
+  join("node_modules", "@sinclair", "typebox"),
+  join("dist", "node_modules", "@sinclair", "typebox"),
+  { recursive: true },
+);
+
 run(process.execPath, ["--check", join("dist", "pi-telegram", "index.js")]);

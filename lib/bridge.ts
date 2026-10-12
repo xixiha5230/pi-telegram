@@ -7,7 +7,8 @@
  */
 
 import * as AgentMessages from "./agent-messages.ts";
-import * as Bindings from "./bindings.ts";
+import type * as Bindings from "./bindings.ts";
+import * as BindingsCore from "./bindings-core.ts";
 import * as BusApi from "./bus-api.ts";
 import * as BusFollower from "./bus-follower.ts";
 import * as BusLeader from "./bus-leader.ts";
@@ -732,9 +733,9 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
       recordRuntimeEvent,
     });
   const generativeAppLiveSurfaceBinding =
-    Bindings.createTelegramGenerativeAppLiveSurfaceBinding();
+    BindingsCore.createTelegramGenerativeAppLiveSurfaceBinding();
   const invokeGenerativeAppBoundButtonAction =
-    Bindings.createTelegramGenerativeAppBoundButtonActionInvoker({
+    BindingsCore.createTelegramGenerativeAppBoundButtonActionInvoker({
       agentDir: Paths.resolveAgentDir(),
       assertExecutionCurrent: Updates.assertTelegramUpdateExecutionCurrent,
       getExecutionFence: Updates.getTelegramUpdateExecutionFence,
@@ -768,7 +769,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     activityVerbosityRuntime,
     assistantOutputRuntime,
     publicationRuntime,
-  } = Bindings.createTelegramActivityBindingRuntime({
+  } = BindingsCore.createTelegramActivityBindingRuntime({
     generation: deliveryGenerationSeed,
     assistantOutput: {
       prepareTelegramPreview: previewRuntime.preparePublication,
@@ -813,7 +814,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     dispatchNext: dispatchNextQueuedTelegramTurn,
     requestNextDispatchAnnouncement,
     watchdog: queueDispatchWatchdogRuntime,
-  } = Bindings.createTelegramQueueBindingRuntime({
+  } = BindingsCore.createTelegramQueueBindingRuntime({
     store: telegramQueueStore,
     queue,
     lifecycle,
@@ -1287,7 +1288,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     handleUpdate: inboundRouteRuntime.handleUpdate,
   });
   const agentMessageToolRoutingRuntime =
-    Bindings.createTelegramAgentMessageToolRoutingRuntime({
+    BindingsCore.createTelegramAgentMessageToolRoutingRuntime({
       ownsLeader: lockRuntime.owns,
       ownsDirectDelivery: ownsTelegramDirectDelivery,
       isFollowerRegistered: telegramBusFollowerRegistrationState.isRegistered,

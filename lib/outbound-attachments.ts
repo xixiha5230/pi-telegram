@@ -7,23 +7,13 @@
 import { stat } from "node:fs/promises";
 import { basename } from "node:path";
 
-import { Type } from "@sinclair/typebox";
-
 import type {
   TelegramBusAgentMessage,
   TelegramBusAgentTargetSelector,
 } from "./bus.ts";
 import {
-  isTelegramChannelPostValidationError,
   TelegramChannelPostValidationError,
 } from "./channel-posts.ts";
-import type { ExtensionAPI } from "./pi.ts";
-import {
-  TELEGRAM_ATTACH_PROMPT_GUIDELINES,
-  TELEGRAM_ATTACH_PROMPT_SNIPPET,
-  TELEGRAM_MESSAGE_PROMPT_GUIDELINES,
-  TELEGRAM_MESSAGE_PROMPT_SNIPPET,
-} from "./prompts.ts";
 import {
   withTelegramReplyParameters,
   normalizeTelegramNativeMarkdown,
@@ -33,7 +23,7 @@ import {
   type TelegramTarget,
 } from "./target.ts";
 
-const MAX_ATTACHMENTS_PER_TURN = 10;
+export const MAX_ATTACHMENTS_PER_TURN = 10;
 
 export const TELEGRAM_OUTBOUND_ATTACHMENT_DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -446,152 +436,6 @@ async function buildTelegramOutboundAttachmentViews(options: {
     });
   }
   return pendingAttachments;
-}
-
-function formatTelegramOutboundToolError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  return new Error(`\n${message.replace(/^\n+/u, "") || "Telegram outbound operation failed."}`);
-}
-
-export function registerTelegramOutboundAttachmentTool(
-  pi: ExtensionAPI,
-  deps: TelegramOutboundAttachmentToolRegistrationDeps,
-): void {
-  const maxAttachmentsPerTurn =
-    deps.maxAttachmentsPerTurn ?? MAX_ATTACHMENTS_PER_TURN;
-  const maxAttachmentSizeBytes =
-    deps.maxAttachmentSizeBytes ?? TELEGRAM_OUTBOUND_ATTACHMENT_MAX_BYTES;
-  pi.registerTool({
-    name: "telegram_attach",
-    label: "Telegram Attach",
-    description:
-      "Queue one or more local files for the active Telegram reply, or send them immediately to Telegram when no Telegram turn is active.",
-    promptSnippet: TELEGRAM_ATTACH_PROMPT_SNIPPET,
-    promptGuidelines: [...TELEGRAM_ATTACH_PROMPT_GUIDELINES],
-    parameters: Type.Object({
-      paths: Type.Array(
-        Type.String({ description: "Local file path to attach" }),
-        { minItems: 1, maxItems: maxAttachmentsPerTurn },
-      ),
-      chat_id: Type.Optional(
-        Type.Number({
-          description:
-            "Optional Telegram chat id for immediate delivery when no Telegram turn is active",
-        }),
-      ),
-      thread_id: Type.Optional(
-        Type.Number({
-          description:
-            "Optional Telegram topic thread id for immediate delivery with chat_id",
-        }),
-      ),
-      caption: Type.Optional(
-        Type.String({
-          description:
-            "Optional caption for immediate delivery; ignored when queued for an active turn",
-        }),
-      ),
-    }),
-    async execute(_toolCallId, params) {
-      try {
-        return await queueTelegramOutboundAttachments({
-          activeTurn: deps.getActiveTurn(),
-          paths: params.paths,
-          chatId: params.chat_id,
-          threadId: params.thread_id,
-          caption: params.caption,
-          maxAttachmentsPerTurn,
-          maxAttachmentSizeBytes,
-          sendMultipart: deps.sendMultipart,
-          getDefaultChatId: deps.getDefaultChatId,
-          getDefaultTarget: deps.getDefaultTarget,
-          canSendDirect: deps.canSendDirect,
-          statPath: deps.statPath,
-        });
-      } catch (error) {
-        deps.recordRuntimeEvent?.("attachment", error, {
-          phase: "queue",
-          count: params.paths.length,
-        });
-        throw formatTelegramOutboundToolError(error);
-      }
-    },
-  });
-}
-
-export function registerTelegramOutboundMessageTool(
-  pi: ExtensionAPI,
-  deps: TelegramOutboundMessageToolRegistrationDeps,
-): void {
-  pi.registerTool({
-    name: "telegram_message",
-    label: "Telegram Message",
-    description:
-      "Send Markdown text directly to the paired/default Telegram chat, an exact channel chat_id, or an explicit live target. Channel delivery supports one optional local photo or video upload with the text as its caption. Channel posting requires Telegram-granted bot permission. Hidden telegram_button comments become inline prompt buttons.",
-    promptSnippet: TELEGRAM_MESSAGE_PROMPT_SNIPPET,
-    promptGuidelines: [...TELEGRAM_MESSAGE_PROMPT_GUIDELINES],
-    parameters: Type.Object({
-      text: Type.String({ description: "Message text to send" }),
-      media: Type.Optional(
-        Type.String({
-          minLength: 1,
-          description:
-            "Local single-file channel upload: .jpg/.jpeg/.png/.webp photo or .mp4 video; the text becomes its caption (max 1024 characters). Albums and other media types are rejected.",
-        }),
-      ),
-      chat_id: Type.Optional(
-        Type.Union([
-          Type.Number(),
-          Type.String({ pattern: "^@[A-Za-z0-9_]{5,32}$" }),
-        ], { description: "Optional exact Telegram chat id or public channel @username" }),
-      ),
-      thread_id: Type.Optional(
-        Type.Number({
-          description: "Optional Telegram topic thread id with chat_id",
-        }),
-      ),
-      channel: Type.Optional(Type.Boolean({
-        description: "Set true only when a numeric chat_id is explicitly intended as a channel",
-      })),
-      thread: Type.Optional(
-        Type.Union([Type.String(), Type.Number()], {
-          description:
-            "Optional live Pi thread name or numeric id for visible delivery plus a target-agent turn",
-        }),
-      ),
-    }),
-    async execute(toolCallId, params) {
-      try {
-        return await sendTelegramOutboundMessage({
-          text: params.text,
-          media: params.media,
-          operationId: toolCallId,
-          channel: params.channel,
-          chatId: params.chat_id,
-          threadId: params.thread_id,
-          agentThread: params.thread,
-          getDefaultChatId: deps.getDefaultChatId,
-          getDefaultTarget: deps.getDefaultTarget,
-          getActiveTurn: deps.getActiveTurn,
-          resolveAgentTarget: deps.resolveAgentTarget,
-          routeAgentMessage: deps.routeAgentMessage,
-          canSendDirect: deps.canSendDirect,
-          planMessage: deps.planMessage,
-          sendMarkdownMessage: deps.sendMarkdownMessage,
-          sendChannelMarkdownMessage: deps.sendChannelMarkdownMessage,
-          sendChannelMediaMessage: deps.sendChannelMediaMessage,
-        });
-      } catch (error) {
-        const isChannelTarget = typeof params.chat_id === "string" || params.channel === true;
-        const reportableError = isChannelTarget &&
-            !isTelegramChannelPostValidationError(error)
-          ? new Error("Telegram channel publication failed; inspect the retained local record before retrying.")
-          : error;
-        deps.recordRuntimeEvent?.("message", reportableError, { phase: "direct" });
-        throw formatTelegramOutboundToolError(reportableError);
-      }
-    },
-  });
 }
 
 export interface TelegramQueuedOutboundAttachmentDeliveryDeps {

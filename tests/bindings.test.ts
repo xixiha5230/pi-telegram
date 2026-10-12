@@ -16,6 +16,8 @@ import {
   createTelegramQueueBindingRuntime,
   createTelegramGenerativeAppBoundButtonActionInvoker,
   createTelegramGenerativeAppLiveSurfaceBinding,
+} from "../lib/bindings-core.ts";
+import {
   registerTelegramCommandsAndTools,
   registerTelegramLifecycleRuntimeHooks,
 } from "../lib/bindings.ts";

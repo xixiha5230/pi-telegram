@@ -10,16 +10,13 @@ import { lstat } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
-import { Type } from "@sinclair/typebox";
-
 import { renameTelegramPathWithRetry, withTelegramFileTransaction } from "./locks.ts";
-import type { ExtensionAPI } from "./pi.ts";
 
 const CHANNEL_POST_JOURNAL_VERSION = 1;
-const DEFAULT_MAX_RECORDS = 256;
+export const DEFAULT_MAX_RECORDS = 256;
 const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
-const MAX_ID_LENGTH = 256;
-const MAX_MARKDOWN_LENGTH = 100_000;
+export const MAX_ID_LENGTH = 256;
+export const MAX_MARKDOWN_LENGTH = 100_000;
 const MAX_CHANNEL_TITLE_LENGTH = 255;
 
 export type TelegramChannelPostMediaKind = "photo" | "video";
@@ -258,75 +255,6 @@ export async function publishTelegramChannelPost(input: {
     channelId: sent.chat.id, messageId: sent.messageId,
     ...(observed.username ? { channelUsername: `@${observed.username}` as `@${string}` } : {}),
     ...(observed.title ? { channelTitle: observed.title } : {}) }).record;
-}
-
-function formatTelegramChannelPostToolOutput(value: unknown): string {
-  // Pi's compact tool rows need one leading newline to separate call and result.
-  return `\n${JSON.stringify(value, null, 2)}`;
-}
-
-function formatTelegramChannelPostToolError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  return new Error(`\n${message.replace(/^\n+/u, "") || "Telegram channel post operation failed."}`);
-}
-
-export function registerTelegramChannelPostMutationTool(
-  pi: ExtensionAPI,
-  deps: { mutate(input: { action: "edit" | "delete"; operationId: string;
-    mutationId: string; markdown?: string }): Promise<TelegramChannelPostRecord> },
-): void {
-  pi.registerTool({
-    name: "telegram_channel_post",
-    label: "Edit or Delete Telegram Channel Post",
-    description: "Edit or delete one exact published post retained by telegram_channel_posts; a media post edit replaces its caption. Unknown outcomes are never replayed.",
-    parameters: Type.Object({
-      action: Type.Union([Type.Literal("edit"), Type.Literal("delete")]),
-      operation_id: Type.String({ minLength: 1, maxLength: MAX_ID_LENGTH }),
-      markdown: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_MARKDOWN_LENGTH })),
-    }),
-    async execute(toolCallId, params) {
-      try {
-        const record = await deps.mutate({ action: params.action, operationId: params.operation_id,
-          mutationId: toolCallId, ...(params.markdown === undefined ? {} : { markdown: params.markdown }) });
-        return { content: [{ type: "text" as const, text: formatTelegramChannelPostToolOutput(record) }],
-          details: { record } };
-      } catch (error) {
-        if (isTelegramChannelPostValidationError(error)) {
-          throw formatTelegramChannelPostToolError(error);
-        }
-        throw new Error("\nTelegram channel post mutation failed; inspect the retained local record before retrying.");
-      }
-    },
-  });
-}
-
-export function registerTelegramChannelPostListTool(
-  pi: ExtensionAPI,
-  deps: { list: TelegramChannelPostJournalStore["list"] },
-): void {
-  pi.registerTool({
-    name: "telegram_channel_posts",
-    label: "Telegram Channel Posts",
-    description: "List bounded local records for channel posts authored by this agent path. This does not read Telegram channel history.",
-    parameters: Type.Object({
-      chat_id: Type.Optional(Type.Union([
-        Type.Number(), Type.String({ pattern: "^@[A-Za-z0-9_]{5,32}$" }),
-      ])),
-      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: DEFAULT_MAX_RECORDS })),
-    }),
-    async execute(_toolCallId, params) {
-      try {
-        const records = deps.list({
-          channel: params.chat_id as TelegramChannelPostAddress | undefined,
-          limit: params.limit,
-        });
-        return { content: [{ type: "text" as const, text: formatTelegramChannelPostToolOutput(records) }],
-          details: { records } };
-      } catch {
-        throw new Error("\nTelegram channel post listing failed without exposing retained content or storage details.");
-      }
-    },
-  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

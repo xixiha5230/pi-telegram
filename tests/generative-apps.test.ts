@@ -25,10 +25,10 @@ import {
   invokeGenerativeApp,
   invokeGenerativeAppBoundAction,
   parseGenerativeAppBoundAction,
-  registerTelegramBindTool,
   resolveGenerativeAppDir,
   resolveGenerativeAppModulePath,
 } from "../lib/generative-apps.ts";
+import { registerTelegramBindTool } from "../lib/telegram-tools.ts";
 import {
   bindTelegramDeliveryRuntime,
   createTelegramBridgeDeliveryRuntime,

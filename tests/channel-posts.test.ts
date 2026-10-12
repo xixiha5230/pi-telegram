@@ -18,12 +18,14 @@ import {
   getTelegramChannelPostCaptionLength,
   inspectTelegramChannelPostMedia,
   publishTelegramChannelPost,
-  registerTelegramChannelPostListTool,
-  registerTelegramChannelPostMutationTool,
   resolveTelegramChannelPostMediaKind,
   TelegramChannelPostJournalError,
   TelegramChannelPostValidationError,
 } from "../lib/channel-posts.ts";
+import {
+  registerTelegramChannelPostListTool,
+  registerTelegramChannelPostMutationTool,
+} from "../lib/telegram-tools.ts";
 import type { ExtensionAPI } from "../lib/pi.ts";
 
 const tokenSha256 = "a".repeat(64);

@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { registerTelegramActivityHandler } from "../api/activity.ts";
 import { createTelegramActivityVerbosityRuntime } from "../lib/activity-verbosity.ts";
 import * as AgentMessages from "../lib/agent-messages.ts";
-import * as Bindings from "../lib/bindings.ts";
+import * as Bindings from "../lib/bindings-core.ts";
 import * as BusApi from "../lib/bus-api.ts";
 import * as BusFollower from "../lib/bus-follower.ts";
 import * as BusLeader from "../lib/bus-leader.ts";

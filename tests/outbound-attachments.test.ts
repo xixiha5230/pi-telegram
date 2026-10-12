@@ -16,8 +16,6 @@ import {
   getTelegramOutboundAttachmentByteLimitFromEnv,
   planTelegramRichOutboundAttachment,
   queueTelegramOutboundAttachments,
-  registerTelegramOutboundAttachmentTool,
-  registerTelegramOutboundMessageTool,
   sendQueuedTelegramOutboundAttachments,
   sendTelegramOutboundFiles,
   sendTelegramOutboundMessage,
@@ -25,6 +23,10 @@ import {
   type TelegramOutboundAttachmentQueueTargetView,
   type TelegramQueuedOutboundAttachmentTurnView,
 } from "../lib/outbound-attachments.ts";
+import {
+  registerTelegramOutboundAttachmentTool,
+  registerTelegramOutboundMessageTool,
+} from "../lib/telegram-tools.ts";
 import { TelegramChannelPostValidationError } from "../lib/channel-posts.ts";
 import type { ExtensionAPI } from "../lib/pi.ts";
 import { createTelegramThreadTarget } from "../lib/target.ts";

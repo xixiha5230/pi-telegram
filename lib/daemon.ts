@@ -4,8 +4,10 @@
  * Owns the external daemon process: it constructs the bridge core with a daemon
  * host, owns Telegram transport, and exposes start/stop for the operator.
  *
- * This is the P1 skeleton. Managed-worker process supervision is layered on top
- * through `lib/supervisor.ts`; attached workers register over the existing bus.
+ * Managed-worker process supervision is layered on top through
+ * `lib/supervisor.ts`; attached workers register over the existing bus. The daemon
+ * composes only host-parameterized core runtimes, so it never loads a Pi tool
+ * registration module or a schema builder.
  */
 
 import { randomUUID } from "node:crypto";
