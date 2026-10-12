@@ -4,9 +4,13 @@
 
 ## Unreleased
 
+## 0.53.3: Self-healing standalone daemon
+
+- `Self-healing standalone daemon`: 0.53.2 replaced the thin daemon bin with a bootstrapper that preemptively tried to vendor every declared peer; when the peer was a host-only package the daemon does not import (e.g. `@earendil-works/pi-...`), `npm install` failed, and the daemon exited. 0.53.3 makes the bootstrapper lazy and demand-driven: it attempts the dynamic import of the daemon entry, and only on `ERR_MODULE_NOT_FOUND` for a bare specifier does it vendor that specific peer and retry. On a normal install the import succeeds first try with zero `npm` calls; on a pruned peer it auto-vendors the single missing peer and retries; on a second start with the vendor present it succeeds first try. The vendored copy is still created at runtime by the separate daemon process, not declared in `package.json`, so the host extension loader's contract that host-provided packages must be `peerDependencies` with a `*` range remains satisfied.
+
 ## 0.53.2: Self-healing standalone daemon
 
-- `Self-healing standalone daemon`: 0.53.1's `dependencies` move for `@sinclair/typebox` violated the host extension loader's "host-provided packages must be `peerDependencies` with a `*` range" contract (installed copies can bypass the loader and produce duplicate runtime modules). 0.53.2 reverts the package to `peerDependencies: { "@sinclair/typebox": "*" }` and replaces the thin daemon bin with a self-healing bootstrapper: on each start it resolves every declared peer from the installed tree, and when a peer is missing (npm auto-installs can be pruned by a later unrelated `npm install`) it vendors the peer into a daemon-private `~/.pi/agent/tmp/telegram/daemon-vendor/node_modules` and symlinks it into the package's own `node_modules` so the child's ESM resolver finds it. The vendored copy is created at runtime by the separate daemon process, not declared in `package.json`, so the loader's contract stays satisfied.
+- `Self-healing standalone daemon (superseded)`: First attempt to fix the standalone `pi-telegram-daemon` losing `@sinclair/typebox` after a later `npm install` pruned the auto-installed peer. 0.53.2 reverted the package to `peerDependencies: { "@sinclair/typebox": "*" }` and replaced the thin daemon bin with a bootstrapper that preemptively tried to vendor every declared peer. The bootstrapper crashed on host-only peers the daemon does not import (`@earendil-works/pi-...`), because `npm install` of them failed and the daemon exited. 0.53.3 replaces the eager design with a lazy, demand-driven retry-on-import-error approach.
 
 ## 0.53.1: Daemon lifecycle fixes
 

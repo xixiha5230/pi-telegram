@@ -1,6 +1,6 @@
 {
   "name": "@xixiha5230/pi-telegram",
-  "version": "0.53.2",
+  "version": "0.53.3",
   "private": false,
   "publishConfig": {
     "access": "public"
