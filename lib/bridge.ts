@@ -53,6 +53,7 @@ import * as TextGroups from "./text-groups.ts";
 import * as ThreadReconciler from "./thread-reconciler.ts";
 import * as ThreadDisplay from "./thread-display.ts";
 import * as Threads from "./threads.ts";
+import * as Ui from "./ui.ts";
 import * as TimeInjection from "./time-injection.ts";
 import * as Updates from "./updates.ts";
 import * as Voice from "./voice.ts";
@@ -873,8 +874,10 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
         getActiveModel: currentModelRuntime.get,
         isCompactionInProgress: lifecycle.isCompactionInProgress,
         getBridgeStatusLineState: statusRuntime.getStatusState,
+        getStatusLabels: Ui.createTelegramStatusLabelsGetter(configStore.getLocale),
       }),
       getPromptTemplateCommands,
+      getLocale: configStore.getLocale,
     }),
     storeModelMenuState: modelMenuRuntime.storeState,
     isIdle,
@@ -882,6 +885,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     sendTextReply,
     editInteractiveMessage,
     sendInteractiveMessage,
+    getLocale: configStore.getLocale,
     sectionRegistry,
 
     // Menu/status UI uses this to reflect whether the active Telegram turn expects voice delivery.
@@ -904,6 +908,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     sendInteractiveMessage,
     editInteractiveMessage,
     answerCallbackQuery,
+    getLocale: configStore.getLocale,
     getModelMenuState: getQueueMenuState,
     getStoredModelMenuState: modelMenuRuntime.getState,
     storeModelMenuState: modelMenuRuntime.storeState,
@@ -938,6 +943,8 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
       sendInteractiveMessage,
       answerCallbackQuery,
       ...configControls,
+      getLocale: configStore.getLocale,
+      setLocale: configStore.setLocale,
       reviewInactiveThreads: inactiveThreadCleanupRuntime.review,
       getThreadDisplayMode() {
         return threadStore.getBotState().threadMode === "enabled"
@@ -1204,6 +1211,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     },
     worker: {
       defaultHandle: inboundRouteRuntime.handleUpdate,
+      adoptOwnerLocale: configStore.adoptDetectedLocale,
       onStateChange: runtimeDiagnostics.scheduleSnapshotPersist,
       settleTerminalExecutionFailure(error) {
         return Sync.settleStaleTelegramTopicExecutionFailure(

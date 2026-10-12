@@ -11,6 +11,15 @@ import type {
   TelegramReplyMarkup,
 } from "./menu-model.ts";
 import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
+import {
+  buildTelegramMainMenuRow,
+  telegramUiTranslator,
+} from "./ui.ts";
+import {
   isThinkingLevel,
   type MenuModel,
   THINKING_LEVELS,
@@ -120,14 +129,17 @@ export async function handleTelegramThinkingMenuCallbackAction(
   return true;
 }
 
-export function buildThinkingMenuText(): string {
-  return "<b>🧠 Choose a thinking level:</b>";
+export function buildThinkingMenuText(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return `<b>${t(locale, "thinking.title")}:</b>`;
 }
 
 export function buildThinkingMenuReplyMarkup(
   currentThinkingLevel: ThinkingLevel,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramReplyMarkup {
-  const rows = [[{ text: "⬆️ Main menu", callback_data: "menu:back" }]];
+  const rows = [[buildTelegramMainMenuRow(telegramUiTranslator(locale))]];
   const levelButtons = THINKING_LEVELS.map((level) => ({
     text: level === currentThinkingLevel ? `🟢 ${level}` : level,
     callback_data: `thinking:set:${level}`,
@@ -143,12 +155,13 @@ export function buildThinkingMenuReplyMarkup(
 export function buildTelegramThinkingMenuRenderPayload(
   _activeModel: MenuModel | undefined,
   currentThinkingLevel: ThinkingLevel,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramMenuRenderPayload {
   return {
     nextMode: "thinking",
-    text: buildThinkingMenuText(),
+    text: buildThinkingMenuText(locale),
     mode: "html",
-    replyMarkup: buildThinkingMenuReplyMarkup(currentThinkingLevel),
+    replyMarkup: buildThinkingMenuReplyMarkup(currentThinkingLevel, locale),
   };
 }
 
@@ -162,6 +175,7 @@ export async function openTelegramThinkingMenu<
     buildTelegramThinkingMenuRenderPayload(
       deps.getActiveModel(),
       deps.getThinkingLevel(),
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
     ),
     deps,
   );
@@ -180,7 +194,11 @@ export async function updateTelegramThinkingMenuMessage(
   if (deps.isVoiceReplyActive?.()) return;
   await editTelegramMenuMessage(
     state,
-    buildTelegramThinkingMenuRenderPayload(activeModel, currentThinkingLevel),
+    buildTelegramThinkingMenuRenderPayload(
+      activeModel,
+      currentThinkingLevel,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+    ),
     deps,
   );
 }

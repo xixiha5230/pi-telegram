@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `Telegram UI i18n and modernization`: Every rendered surface resolves a UI locale (`telegram.json` `locale` > owner's Telegram `language_code` > English) and translates through one catalog (`lib/i18n.ts`) with `en` and `zh-CN`; `setMyCommands` registers per `language_code`. `lib/ui.ts` adds hero, breadcrumb, and toggle primitives. `/start` is a hero plus buttons, Settings uses toggle rows and a breadcrumb.
+
 - `Standalone daemon dependency split`: Pi-facing tool registration moved into `lib/telegram-tools.ts`, and the shared queue/activity/agent-message runtimes moved into schema-free `lib/bindings-core.ts`. `@sinclair/typebox` is now absent from the daemon's module graph, and the build copies it into `dist/node_modules` so the built daemon and extension always resolve a schema builder after npm prunes the peer. The daemon launcher no longer installs or symlinks a missing peer.
 
 ## 0.53.3: Self-healing standalone daemon

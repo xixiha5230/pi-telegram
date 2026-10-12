@@ -6,6 +6,16 @@
 
 import type { TelegramInlineKeyboardMarkup } from "./keyboard.ts";
 import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
+import {
+  buildTelegramBackRow,
+  buildTelegramMainMenuRow,
+  telegramUiTranslator,
+} from "./ui.ts";
+import {
   getCanonicalModelId,
   type MenuModel,
   modelsMatch,
@@ -142,6 +152,8 @@ export interface TelegramMenuMessageRuntimeDeps {
     replyMarkup: TelegramReplyMarkup,
     options?: { target?: { chatId: number; threadId?: number } },
   ) => Promise<number | undefined>;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
 }
 
 export type TelegramModelMenuCallbackDeps<
@@ -263,6 +275,16 @@ const TELEGRAM_MODEL_PAGE_PICKER_ROW_SIZE = 4;
 export const MODEL_MENU_TITLE = "<b>🤖 Choose a model:</b>";
 export const MODEL_PAGE_MENU_TITLE = "<b>Choose a page:</b>";
 export const MODEL_DETAIL_MENU_TITLE = "<b>🤖 Model:</b>";
+
+function getModelMenuTitle(locale: TelegramLocale): string {
+  return `<b>${t(locale, "model.title")}:</b>`;
+}
+function getModelPageMenuTitle(locale: TelegramLocale): string {
+  return `<b>${t(locale, "model.pageTitle")}:</b>`;
+}
+function getModelDetailMenuTitle(locale: TelegramLocale): string {
+  return `<b>${t(locale, "model.detailTitle")}:</b>`;
+}
 
 function truncateTelegramButtonLabel(label: string, maxLength = 56): string {
   return label.length <= maxLength
@@ -1001,9 +1023,10 @@ export function buildModelMenuReplyMarkup(
   state: TelegramModelMenuState,
   currentModel: MenuModel | undefined,
   pageSize: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramReplyMarkup {
   const menuPage = getTelegramModelMenuPage(state, pageSize);
-  const rows = [[{ text: "⬆️ Main menu", callback_data: "menu:back" }]];
+  const rows = [[buildTelegramMainMenuRow(telegramUiTranslator(locale))]];
   if (state.scopedModels.length > 0) {
     rows.push([
       {
@@ -1044,12 +1067,13 @@ export function buildModelMenuReplyMarkup(
 export function buildModelDetailMenuReplyMarkup(
   state: TelegramModelMenuState,
   currentModel: MenuModel | undefined,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramReplyMarkup {
   const selection = getTelegramSelectedDetailModel(state);
   if (selection.kind !== "selected") {
     return {
       inline_keyboard: [
-        [{ text: "⬆️ Back", callback_data: "model:pages:back" }],
+        [buildTelegramBackRow("model:pages:back", telegramUiTranslator(locale))],
       ],
     };
   }
@@ -1081,19 +1105,21 @@ export function buildModelDetailMenuReplyMarkup(
 
 export function buildModelDetailMenuText(
   state: TelegramModelMenuState,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
   const selection = getTelegramSelectedDetailModel(state);
-  if (selection.kind !== "selected") return MODEL_DETAIL_MENU_TITLE;
+  if (selection.kind !== "selected") return getModelDetailMenuTitle(locale);
   const model = selection.selection.model;
-  return `${MODEL_DETAIL_MENU_TITLE}\n${getCanonicalModelId(model)}`;
+  return `${getModelDetailMenuTitle(locale)}\n${getCanonicalModelId(model)}`;
 }
 
 export function buildModelPageMenuReplyMarkup(
   state: TelegramModelMenuState,
   pageSize: number,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramReplyMarkup {
   const menuPage = getTelegramModelMenuPage(state, pageSize);
-  const rows = [[{ text: "⬆️ Back", callback_data: "model:pages:back" }]];
+  const rows = [[buildTelegramBackRow("model:pages:back", telegramUiTranslator(locale))]];
   for (
     let page = 0;
     page < menuPage.pageCount;
@@ -1125,38 +1151,41 @@ export function buildModelPageMenuReplyMarkup(
 
 export function buildTelegramModelPageMenuRenderPayload(
   state: TelegramModelMenuState,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramMenuRenderPayload {
   return {
     nextMode: "model-pages",
-    text: MODEL_PAGE_MENU_TITLE,
+    text: getModelPageMenuTitle(locale),
     mode: "html",
-    replyMarkup: buildModelPageMenuReplyMarkup(state, TELEGRAM_MODEL_PAGE_SIZE),
+    replyMarkup: buildModelPageMenuReplyMarkup(state, TELEGRAM_MODEL_PAGE_SIZE, locale),
   };
 }
 
 export function buildTelegramModelMenuRenderPayload(
   state: TelegramModelMenuState,
   activeModel: MenuModel | undefined,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramMenuRenderPayload {
   if (state.mode === "model-pages") {
-    return buildTelegramModelPageMenuRenderPayload(state);
+    return buildTelegramModelPageMenuRenderPayload(state, locale);
   }
   if (state.mode === "model-detail") {
     return {
       nextMode: "model-detail",
-      text: buildModelDetailMenuText(state),
+      text: buildModelDetailMenuText(state, locale),
       mode: "html",
-      replyMarkup: buildModelDetailMenuReplyMarkup(state, activeModel),
+      replyMarkup: buildModelDetailMenuReplyMarkup(state, activeModel, locale),
     };
   }
   return {
     nextMode: "model",
-    text: MODEL_MENU_TITLE,
+    text: getModelMenuTitle(locale),
     mode: "html",
     replyMarkup: buildModelMenuReplyMarkup(
       state,
       activeModel,
       TELEGRAM_MODEL_PAGE_SIZE,
+      locale,
     ),
   };
 }
@@ -1168,7 +1197,11 @@ export async function updateTelegramModelMenuMessage(
 ): Promise<void> {
   await editTelegramMenuMessage(
     state,
-    buildTelegramModelMenuRenderPayload(state, activeModel),
+    buildTelegramModelMenuRenderPayload(
+      state,
+      activeModel,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+    ),
     deps,
   );
 }
@@ -1180,7 +1213,11 @@ export function sendTelegramModelMenuMessage(
 ): Promise<number | undefined> {
   return sendTelegramMenuMessage(
     state,
-    buildTelegramModelMenuRenderPayload(state, activeModel),
+    buildTelegramModelMenuRenderPayload(
+      state,
+      activeModel,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+    ),
     deps,
   );
 }

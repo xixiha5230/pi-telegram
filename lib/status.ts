@@ -4,6 +4,26 @@
  * Builds usage, cost, and context summaries for the interactive Telegram status view
  */
 
+/**
+ * Localizable status row labels. Injected by the composition root so this
+ * structural leaf domain keeps zero local imports.
+ */
+export interface TelegramStatusLabels {
+  status: string;
+  tokens: string;
+  cache: string;
+  cost: string;
+  context: string;
+}
+
+export const TELEGRAM_DEFAULT_STATUS_LABELS: TelegramStatusLabels = {
+  status: "Status",
+  tokens: "Tokens",
+  cache: "Cache",
+  cost: "Cost",
+  context: "Context",
+};
+
 const TELEGRAM_STATUS_DEFAULT_PROFILE_NAME = "default";
 
 export type TelegramStatusQueueLane = "control" | "priority" | "default";
@@ -657,12 +677,14 @@ export function createTelegramStatusHtmlBuilder<TContext>(deps: {
   getActiveModel: (ctx: TContext) => TelegramStatusActiveModel | undefined;
   isCompactionInProgress?: () => boolean;
   getBridgeStatusLineState?: () => TelegramBridgeStatusLineState;
+  getStatusLabels?: () => TelegramStatusLabels;
 }): (ctx: TContext & TelegramStatusContext) => string {
   return (ctx) =>
     buildStatusHtml(
       { ...ctx, isCompactionInProgress: deps.isCompactionInProgress },
       deps.getActiveModel(ctx),
       deps.getBridgeStatusLineState?.(),
+      deps.getStatusLabels?.() ?? TELEGRAM_DEFAULT_STATUS_LABELS,
     );
 }
 
@@ -1597,6 +1619,7 @@ export function buildStatusHtml(
   ctx: TelegramStatusContext,
   activeModel: TelegramStatusActiveModel | undefined,
   bridgeStatus?: TelegramBridgeStatusLineState,
+  labels: TelegramStatusLabels = TELEGRAM_DEFAULT_STATUS_LABELS,
 ): string {
   const stats = collectUsageStats(ctx);
   const usesSubscription = activeModel
@@ -1604,7 +1627,7 @@ export function buildStatusHtml(
     : false;
   const lines: string[] = [
     buildStatusRow(
-      "Status",
+      labels.status,
       `${buildStatusSummary(ctx)}${buildTelegramStatusRoleSuffix(bridgeStatus)}`,
     ),
   ];
@@ -1612,15 +1635,15 @@ export function buildStatusHtml(
   const cacheSummary = buildCacheSummary(stats);
   const costSummary = buildCostSummary(stats, usesSubscription);
   if (usageSummary) {
-    lines.push(buildStatusRow("Tokens", usageSummary));
+    lines.push(buildStatusRow(labels.tokens, usageSummary));
   }
   if (cacheSummary) {
-    lines.push(buildStatusRow("Cache", cacheSummary));
+    lines.push(buildStatusRow(labels.cache, cacheSummary));
   }
   if (costSummary) {
-    lines.push(buildStatusRow("Cost", costSummary));
+    lines.push(buildStatusRow(labels.cost, costSummary));
   }
-  lines.push(buildStatusRow("Context", buildContextSummary(ctx, activeModel)));
+  lines.push(buildStatusRow(labels.context, buildContextSummary(ctx, activeModel)));
   for (const row of getTelegramStatusLineProviderResults({ activeModel })) {
     lines.push(buildStatusRow(row.label, row.value));
   }

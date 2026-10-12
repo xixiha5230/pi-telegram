@@ -26,6 +26,12 @@ export { TELEGRAM_DEFAULT_PROFILE_NAME } from "./paths.ts";
 
 import type { CommandTemplateObjectConfig } from "./command-templates.ts";
 import type { TelegramInboundHandlerConfig } from "./inbound.ts";
+import {
+  isTelegramLocale,
+  resolveTelegramLocale,
+  TELEGRAM_DEFAULT_LOCALE,
+  type TelegramLocale,
+} from "./i18n.ts";
 import { withTelegramFileTransaction } from "./locks.ts";
 
 const CONFIG_RUNTIME_KEY = "__piTelegramConfigRuntime__";
@@ -299,6 +305,12 @@ export interface TelegramConfig {
   allowedUserId?: number;
   /** Effective view; persisted under profiles.<name>. */
   threadDisplayMode?: TelegramThreadDisplayMode;
+  /**
+   * UI locale for every Telegram-rendered surface. Unset resolves to English.
+   * When unset, the bridge may adopt the paired owner's Telegram language on
+   * first contact; an explicit value always wins.
+   */
+  locale?: TelegramLocale;
   inboundHandlers?: TelegramInboundHandlerConfig[];
   attachmentHandlers?: TelegramInboundHandlerConfig[];
   outboundHandlers?: TelegramOutboundHandlerConfig[];
@@ -395,6 +407,12 @@ export interface TelegramConfigStore {
   hasBotToken: () => boolean;
   hasBotIdentity: () => boolean;
   getAllowedUserId: () => number | undefined;
+  /** Resolved UI locale: explicit config value, else the owner's Telegram language, else English. */
+  getLocale: () => TelegramLocale;
+  /** Persist an explicit UI locale override. */
+  setLocale: (locale: TelegramLocale) => void;
+  /** Adopt the owner's Telegram language only while no explicit locale is set. */
+  adoptDetectedLocale: (languageCode: string | undefined) => void;
   getLegacyPollingCursor: () => number | undefined;
   removeLegacyPollingCursor: () => void;
   getInboundHandlers: () => TelegramInboundHandlerConfig[] | undefined;
@@ -856,6 +874,7 @@ export function createTelegramConfigStore(
   let mutationVersion = 0;
   let persistQueue: Promise<void> = Promise.resolve();
   let activeProfileName: string | undefined;
+  let detectedLocale: TelegramLocale | undefined;
   let lastLoadRecoveredInvalidConfig = false;
   const agentDir = options.agentDir ?? resolveAgentDir();
   const configPath = options.configPath ?? getConfigPath();
@@ -975,6 +994,20 @@ export function createTelegramConfigStore(
     hasBotToken: () => !!resolveIdentity(),
     hasBotIdentity: () => !!resolveIdentity(),
     getAllowedUserId: () => getEffectiveConfig().allowedUserId,
+    getLocale: () => {
+      const configured = getEffectiveConfig().locale;
+      if (isTelegramLocale(configured)) return configured;
+      return detectedLocale ?? TELEGRAM_DEFAULT_LOCALE;
+    },
+    setLocale: (locale) => {
+      const nextConfig = getEffectiveConfig();
+      nextConfig.locale = locale;
+      setEffectiveConfig(nextConfig);
+    },
+    adoptDetectedLocale: (languageCode) => {
+      if (isTelegramLocale(getEffectiveConfig().locale)) return;
+      detectedLocale = resolveTelegramLocale(languageCode);
+    },
     getLegacyPollingCursor: () =>
       (getEffectiveConfig() as TelegramConfig & TelegramLegacyCursorCarrier)
         .lastUpdateId,

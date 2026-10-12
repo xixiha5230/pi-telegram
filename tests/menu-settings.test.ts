@@ -186,7 +186,10 @@ test("Draft preview settings identify on as the default without changing the cur
 });
 
 test("Settings menu text and reply markup expose built-in controls", () => {
-  assert.equal(buildTelegramSettingsMenuText(), "<b>⚙️ Settings:</b>");
+  assert.match(
+    buildTelegramSettingsMenuText(),
+    /^<b>⚙️ Settings<\/b> · home › settings/,
+  );
 
   const markup = buildTelegramSettingsMenuReplyMarkup(
     false,
@@ -205,11 +208,12 @@ test("Settings menu text and reply markup expose built-in controls", () => {
       "settings:open:voice-reply",
       "settings:open:activity-verbosity",
       "settings:open:time-injection",
+      "settings:open:language",
     ],
   );
   assert.equal(
     markup.inline_keyboard[1]?.[0]?.text,
-    "📝 Draft previews: off",
+    "⬜ 📝 Draft previews",
   );
   assert.equal(markup.inline_keyboard[2]?.[0]?.text, "🧾 Rendering: rich");
   assert.equal(
@@ -218,7 +222,7 @@ test("Settings menu text and reply markup expose built-in controls", () => {
   );
   assert.equal(markup.inline_keyboard[4]?.[0]?.text, "🔬 Activity: quiet");
   assert.equal(markup.inline_keyboard[5]?.[0]?.text, "🕒 Time injection: hidden");
-  assert.equal(markup.inline_keyboard.length, 6);
+  assert.equal(markup.inline_keyboard.length, 7);
   const customMarkup = buildTelegramSettingsMenuReplyMarkup(
     false,
     "rich",
@@ -231,8 +235,9 @@ test("Settings menu text and reply markup expose built-in controls", () => {
     "directory-title",
     true,
   );
-  assert.equal(customMarkup.inline_keyboard.at(-2)?.[0]?.text, "🧹 Thread cleanup: on");
-  assert.equal(customMarkup.inline_keyboard.at(-1)?.[0]?.text, "🧵 Thread display: custom");
+  assert.equal(customMarkup.inline_keyboard.at(-3)?.[0]?.text, "✅ 🧹 Thread cleanup");
+  assert.equal(customMarkup.inline_keyboard.at(-2)?.[0]?.text, "🧵 Thread display: custom");
+  assert.equal(customMarkup.inline_keyboard.at(-1)?.[0]?.text, "🌐 Language: en");
 });
 
 test("Settings detail markups show active values", () => {
@@ -436,7 +441,7 @@ test("Settings callback action mutates live settings and retires stale proactive
     "activity:verbose",
     "update:<b>🔬 Activity:</b> <code>quiet</code>",
     "answer:Activity: verbose",
-    "update:<b>⚙️ Settings:</b>",
+    "update:<b>⚙️ Settings</b> · home › settings",
     "answer:Public assistant output is always delivered while Telegram is connected.",
     "automatic-thread-cleanup:false",
     "update:<b>🧹 Thread cleanup:</b> <code>on</code>",

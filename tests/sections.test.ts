@@ -703,13 +703,14 @@ test("buildTelegramSettingsMenuReplyMarkup injects extension settings rows", asy
   assert.deepEqual(
     rows.slice(1).map((row) => row[0].text),
     [
-      "📝 Draft previews: off",
+      "⬜ 📝 Draft previews",
       "🧾 Rendering: rich",
       "👄 Voice reply: manual",
       "🔬 Activity: quiet",
       "🕒 Time injection: hidden",
       "🧪 Core (Alpha)",
       "🔧 Core (Beta)",
+      "🌐 Language: en",
     ],
   );
   assert.ok(rows[6][0].callback_data?.startsWith("section:"));

@@ -12,6 +12,14 @@ import {
 import type * as Pi from "./pi.ts";
 import type { ExtensionAPI, ExtensionCommandContext } from "./pi.ts";
 import { escapeHtml } from "./rendering.ts";
+import { buildTelegramHeroHtml } from "./ui.ts";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  TELEGRAM_SUPPORTED_LOCALES,
+  t,
+  type TelegramLocale,
+  type TelegramMessageKey,
+} from "./i18n.ts";
 import type { TelegramBridgeStatusLineOptions } from "./status.ts";
 import {
   formatTelegramDaemonStatus,
@@ -272,62 +280,33 @@ function formatTelegramBotCommandDescription(
   return `${formatTelegramCommandEmojiPrefix(command)}${description}`;
 }
 
+/** Message keys for the built-in command menu, in registration order. */
+const TELEGRAM_BOT_COMMAND_KEYS: readonly [
+  TelegramCommandEmojiName,
+  TelegramMessageKey,
+][] = [
+  ["start", "command.start"],
+  ["compact", "command.compact"],
+  ["new", "command.new"],
+  ["sessions", "command.sessions"],
+  ["continue", "command.continue"],
+  ["next", "command.next"],
+  ["abort", "command.abort"],
+  ["stop", "command.stop"],
+];
+
+/** Built-in bot commands localized for one UI locale. */
+export function getTelegramBuiltinBotCommands(
+  locale: TelegramLocale,
+): TelegramBotCommandDefinition[] {
+  return TELEGRAM_BOT_COMMAND_KEYS.map(([command, key]) => ({
+    command,
+    description: formatTelegramBotCommandDescription(command, t(locale, key)),
+  }));
+}
+
 export const TELEGRAM_BUILTIN_BOT_COMMANDS: readonly TelegramBotCommandDefinition[] =
-  [
-    {
-      command: "start",
-      description: formatTelegramBotCommandDescription(
-        "start",
-        "Open menu / Pair bridge",
-      ),
-    },
-    {
-      command: "compact",
-      description: formatTelegramBotCommandDescription(
-        "compact",
-        "Compact current session",
-      ),
-    },
-    {
-      command: "new",
-      description: formatTelegramBotCommandDescription(
-        "new",
-        "Start a new session",
-      ),
-    },
-    {
-      command: "sessions",
-      description: formatTelegramBotCommandDescription(
-        "sessions",
-        "List or switch sessions",
-      ),
-    },
-    {
-      command: "continue",
-      description: formatTelegramBotCommandDescription(
-        "continue",
-        "Queue continue prompt",
-      ),
-    },
-    {
-      command: "next",
-      description: formatTelegramBotCommandDescription(
-        "next",
-        "Force next turn",
-      ),
-    },
-    {
-      command: "abort",
-      description: formatTelegramBotCommandDescription("abort", "Abort Pi"),
-    },
-    {
-      command: "stop",
-      description: formatTelegramBotCommandDescription(
-        "stop",
-        "Abort Pi & Clear queue",
-      ),
-    },
-  ];
+  getTelegramBuiltinBotCommands(TELEGRAM_DEFAULT_LOCALE);
 
 export const TELEGRAM_BOT_COMMANDS = TELEGRAM_BUILTIN_BOT_COMMANDS;
 
@@ -350,29 +329,49 @@ export function getTelegramReservedCommandNames(): string[] {
 export interface TelegramBotCommandRegistrationDeps {
   setMyCommands: (
     commands: readonly TelegramBotCommandDefinition[],
+    options?: { languageCode?: string },
   ) => Promise<unknown>;
+}
+
+/**
+ * Telegram expects a two-letter ISO 639-1 `language_code`. A region-qualified
+ * locale such as `zh-CN` registers under its primary subtag (`zh`).
+ */
+function getTelegramCommandLanguageCode(locale: TelegramLocale): string {
+  return locale.split("-")[0] ?? locale;
+}
+
+function mergeTelegramBotCommands(
+  locale: TelegramLocale,
+  extensionCommands: readonly TelegramBotCommandDefinition[],
+): TelegramBotCommandDefinition[] {
+  const builtin = getTelegramBuiltinBotCommands(locale);
+  if (extensionCommands.length === 0) return builtin;
+  const nextCommandIndex = builtin.findIndex(
+    (command) => command.command === "next",
+  );
+  if (nextCommandIndex === -1) return [...builtin, ...extensionCommands];
+  return [
+    ...builtin.slice(0, nextCommandIndex + 1),
+    ...extensionCommands,
+    ...builtin.slice(nextCommandIndex + 1),
+  ];
 }
 
 export async function registerTelegramBotCommands(
   deps: TelegramBotCommandRegistrationDeps,
 ): Promise<void> {
   const extensionCommands = getVisibleTelegramExtensionBotCommands();
-  if (extensionCommands.length === 0) {
-    await deps.setMyCommands(TELEGRAM_BOT_COMMANDS);
-    return;
-  }
-  const nextCommandIndex = TELEGRAM_BOT_COMMANDS.findIndex(
-    (command) => command.command === "next",
+  // The default registration (no language_code) is the fallback for every user.
+  await deps.setMyCommands(
+    mergeTelegramBotCommands(TELEGRAM_DEFAULT_LOCALE, extensionCommands),
   );
-  if (nextCommandIndex === -1) {
-    await deps.setMyCommands([...TELEGRAM_BOT_COMMANDS, ...extensionCommands]);
-    return;
+  for (const locale of TELEGRAM_SUPPORTED_LOCALES) {
+    if (locale === TELEGRAM_DEFAULT_LOCALE) continue;
+    await deps.setMyCommands(mergeTelegramBotCommands(locale, extensionCommands), {
+      languageCode: getTelegramCommandLanguageCode(locale),
+    });
   }
-  await deps.setMyCommands([
-    ...TELEGRAM_BOT_COMMANDS.slice(0, nextCommandIndex + 1),
-    ...extensionCommands,
-    ...TELEGRAM_BOT_COMMANDS.slice(nextCommandIndex + 1),
-  ]);
 }
 
 export function createTelegramBotCommandRegistrar(
@@ -1371,17 +1370,9 @@ export interface TelegramCommandRuntimeDeps<
   assertExecutionCurrent?: (message: TMessage) => void;
 }
 
-export const TELEGRAM_APP_MENU_INTRO_HTML = [
-  "<b>Pi Telegram</b>",
-  "",
-  `${formatTelegramCommandEmojiPrefix("start")}/start — Open menu / Pair bridge`,
-  `${formatTelegramCommandEmojiPrefix("compact")}/compact — Compact current session`,
-  `${formatTelegramCommandEmojiPrefix("new")}/new — Start a new session`,
-  `${formatTelegramCommandEmojiPrefix("continue")}/continue — Queue continue prompt`,
-  `${formatTelegramCommandEmojiPrefix("next")}/next — Force next turn`,
-  `${formatTelegramCommandEmojiPrefix("abort")}/abort — Abort Pi`,
-  `${formatTelegramCommandEmojiPrefix("stop")}/stop — Abort Pi & Clear queue`,
-].join("\n");
+export const TELEGRAM_APP_MENU_INTRO_HTML = buildTelegramAppMenuIntroHtml(
+  TELEGRAM_DEFAULT_LOCALE,
+);
 
 function escapeTelegramCommandMenuHtml(text: string): string {
   return text
@@ -1399,38 +1390,27 @@ function buildTelegramPromptTemplateMenuHtml(
     .join("\n");
 }
 
-function buildTelegramExtensionCommandMenuLines(): string[] {
-  return getTelegramExtensionCommands()
-    .filter((command) => command.showInMenu)
-    .map((command) => {
-      const prefix = `${escapeTelegramCommandMenuHtml(command.emoji ?? "")} /${escapeTelegramCommandMenuHtml(command.name)}`;
-      if (!command.description) return prefix;
-      return `${prefix} — ${escapeTelegramCommandMenuHtml(command.description)}`;
-    });
-}
-
-function buildTelegramAppMenuIntroHtml(): string {
-  const extensionLines = buildTelegramExtensionCommandMenuLines();
-  if (extensionLines.length === 0) return TELEGRAM_APP_MENU_INTRO_HTML;
-  return [
-    "<b>Pi Telegram</b>",
-    "",
-    `${formatTelegramCommandEmojiPrefix("start")}/start — Open menu / Pair bridge`,
-    `${formatTelegramCommandEmojiPrefix("compact")}/compact — Compact current session`,
-    `${formatTelegramCommandEmojiPrefix("new")}/new — Start a new session`,
-    `${formatTelegramCommandEmojiPrefix("continue")}/continue — Queue continue prompt`,
-    `${formatTelegramCommandEmojiPrefix("next")}/next — Force next turn`,
-    ...extensionLines,
-    `${formatTelegramCommandEmojiPrefix("abort")}/abort — Abort Pi`,
-    `${formatTelegramCommandEmojiPrefix("stop")}/stop — Abort Pi & Clear queue`,
-  ].join("\n");
+/**
+ * A modern `/start` hero: one bold title, a short value pitch, and a one-line
+ * tip. Commands live in Telegram's own command menu, so the intro no longer
+ * repeats the command wall.
+ */
+export function buildTelegramAppMenuIntroHtml(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return buildTelegramHeroHtml({
+    title: t(locale, "menu.title"),
+    subtitle: t(locale, "menu.subtitle"),
+    tip: t(locale, "menu.tip"),
+  });
 }
 
 export function buildTelegramAppMenuHtml(
   statusHtml: string,
   promptTemplates: readonly TelegramPromptTemplateMenuCommand[] = [],
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
-  const introHtml = buildTelegramAppMenuIntroHtml();
+  const introHtml = buildTelegramAppMenuIntroHtml(locale);
   const promptTemplateHtml =
     buildTelegramPromptTemplateMenuHtml(promptTemplates);
   if (!promptTemplateHtml) return `${introHtml}\n\n${statusHtml}`;
@@ -1440,11 +1420,13 @@ export function buildTelegramAppMenuHtml(
 export function createTelegramAppMenuHtmlBuilder<TContext>(deps: {
   buildStatusHtml: (ctx: TContext) => string;
   getPromptTemplateCommands?: () => readonly TelegramPromptTemplateMenuCommand[];
+  getLocale?: () => TelegramLocale;
 }): (ctx: TContext) => string {
   return (ctx) => {
     return buildTelegramAppMenuHtml(
       deps.buildStatusHtml(ctx),
       deps.getPromptTemplateCommands?.(),
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
     );
   };
 }

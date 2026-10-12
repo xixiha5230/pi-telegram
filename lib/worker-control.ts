@@ -8,6 +8,7 @@
  */
 
 import { TELEGRAM_WORKER_CALLBACK_PREFIX } from "./worker-browser.ts";
+import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
 import type { TelegramTarget } from "./target.ts";
 import type {
   TelegramWorkerView,
@@ -93,7 +94,6 @@ const NOTICE_NO_WORKERS = "📭 **No live Pi workers.**";
 const NOTICE_UNKNOWN_WORKER = "⚠️ **Unknown Pi worker.**";
 const NOTICE_MANAGED_UNAVAILABLE =
   "🚫 **Managed Pi workers are unavailable.**";
-const MENU_HTML = "🛠️ <b>Daemon control:</b>\n<i>Pick an action below.</i>";
 
 /** Callback verbs shared by the daemon menu and the directory picker. */
 export const TELEGRAM_WORKER_MENU_CALLBACKS = {
@@ -226,18 +226,22 @@ export interface TelegramWorkerControlDeps {
     isUnattendedCleanupEnabled?: () => boolean;
     setUnattendedCleanup?: (enabled: boolean) => Promise<void>;
   };
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
 
 }
 
 export function createTelegramWorkerControl(
   deps: TelegramWorkerControlDeps,
 ): TelegramWorkerControl {
+  const locale = (): TelegramLocale =>
+    deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE;
   const renderList = () =>
     renderTelegramWorkerList(deps.workers.list(), deps.routes.list());
 
   const backToMenu = (): TelegramWorkerInlineKeyboard => ({
     inline_keyboard: [
-      [{ text: "↩️ Menu", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu }],
+      [{ text: t(locale(), "daemon.menu"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.menu }],
     ],
   });
 
@@ -346,22 +350,22 @@ export function createTelegramWorkerControl(
   const menuKeyboard = (): TelegramWorkerInlineKeyboard => {
     const rows: TelegramWorkerInlineKeyboard["inline_keyboard"] = [
       [
-        { text: "👷 Workers", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.workers },
-        { text: "📁 New worker…", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.newWorker },
+        { text: t(locale(), "daemon.workers"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.workers },
+        { text: t(locale(), "daemon.newWorker"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.newWorker },
       ],
     ];
     if (deps.renderStatus || deps.cleanup) {
       rows.push([
         ...(deps.renderStatus
-          ? [{ text: "ℹ️ Status", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.status }]
+          ? [{ text: t(locale(), "daemon.status"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.status }]
           : []),
         ...(deps.cleanup
-          ? [{ text: "🧹 Threads", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanup }]
+          ? [{ text: t(locale(), "daemon.threads"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.cleanup }]
           : []),
       ]);
     }
     rows.push([
-      { text: "✖️ Close", callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.close },
+      { text: t(locale(), "daemon.close"), callback_data: TELEGRAM_WORKER_MENU_CALLBACKS.close },
     ]);
     return { inline_keyboard: rows };
   };
@@ -372,7 +376,11 @@ export function createTelegramWorkerControl(
   ): Promise<TelegramWorkerControlResult> => {
     switch (command.kind) {
       case "menu":
-        return { ok: true, html: MENU_HTML, keyboard: menuKeyboard() };
+        return {
+          ok: true,
+          html: `<b>${t(locale(), "daemon.title")}</b>\n<i>${t(locale(), "daemon.subtitle")}</i>`,
+          keyboard: menuKeyboard(),
+        };
       case "status":
         if (!deps.renderStatus) return { ok: false, html: NOTICE_MANAGED_UNAVAILABLE };
         return { ok: true, html: deps.renderStatus(), keyboard: backToMenu() };

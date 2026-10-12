@@ -6,6 +6,7 @@
 
 import { randomUUID } from "node:crypto";
 
+import { getTelegramUpdateLanguageCode } from "./i18n.ts";
 import {
   createTelegramPrivateTarget,
   createTelegramThreadTarget,
@@ -3630,6 +3631,8 @@ export interface TelegramUpdateAdmissionHandleDeps<
     ctx: TContext,
     execution?: TelegramUpdateExecutionFence,
   ) => Promise<void>;
+  /** Adopt the paired owner's Telegram language before rendering a turn. */
+  adoptOwnerLocale?: (languageCode: string | undefined) => void;
   registry?: TelegramUpdateHandlerRegistry;
   onLateOutcome?: (
     outcome: TelegramUpdateAdmissionOutcome,
@@ -4640,6 +4643,7 @@ export function createTelegramUpdateAdmissionHandle<
       },
     };
     execution.assertCurrent();
+    deps.adoptOwnerLocale?.(getTelegramUpdateLanguageCode(update));
     const verdict = await registry.dispatch(update, execution);
     execution.assertCurrent();
     if (verdict === "consume") return { kind: "complete" };
@@ -5992,6 +5996,7 @@ export type TelegramUpdateAdmissionWorkerRuntimeDeps<
     execution?: TelegramUpdateExecutionFence,
   ) => Promise<void>;
   prepareUpdateForExecution?: (update: TUpdate) => TUpdate;
+  adoptOwnerLocale?: (languageCode: string | undefined) => void;
   registry?: TelegramUpdateHandlerRegistry;
 };
 
@@ -6005,6 +6010,7 @@ export function createTelegramUpdateAdmissionWorkerRuntime<
   let worker: TelegramUpdateWorkerRuntime<TContext> | undefined;
   const executeUpdate = createTelegramUpdateAdmissionHandle<TUpdate, TContext>({
     defaultHandle: deps.defaultHandle,
+    adoptOwnerLocale: deps.adoptOwnerLocale,
     registry: deps.registry,
     onLateOutcome(outcome, details) {
       worker?.settleDeferred({

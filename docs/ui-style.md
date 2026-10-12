@@ -15,6 +15,38 @@ Small standard for inline buttons, menu rows, state controls, cards, and confirm
 - Prefer minimal, clear configuration UI over exhaustive explanation.
 - Preserve domain-owned callback prefixes and behavior in the owning module.
 
+## Localization
+
+Every operator-facing string is authored in the English source catalog in
+`lib/i18n.ts`; other locales override a subset and fall back to English. Render
+paths must never hardcode a new English literal — add a catalog key and translate
+through `t(locale, key, params)`.
+
+- Locale resolution order: an explicit `telegram.json` `locale`, else the paired
+owner's Telegram `language_code` (adopted on inbound turns), else English.
+- The resolved locale is per profile and read at render time through
+`configStore.getLocale`; render deps take an optional `getLocale`.
+- `setMyCommands` registers the command menu once per supported locale using
+Telegram's `language_code` (a region-qualified locale uses its primary subtag).
+- `lib/status.ts` is a structural leaf domain: it takes a `TelegramStatusLabels`
+object instead of importing the catalog, so keep localized labels out of leaf
+domains.
+
+## Modern Surface Patterns
+
+Follow the button-first guidance from Telegram's own bot guidelines and the
+GramIO UX patterns:
+
+- `/start` is a short hero (bold title, blockquote pitch, italic tip) plus
+buttons — never a wall of command text. Commands stay in Telegram's command menu.
+- Nested menus carry a breadcrumb, a one-level `⬆️ Back`, and a way home.
+- A toggle's label states the value (`✅ On` / `⬜ Off`); one tap flips it and
+re-renders in place. Keep toggles out of navigation rows.
+- Destructive actions open a confirmation view; never confirm with an alert.
+- Every callback answers `answerCallbackQuery`; empty for navigation, a toast for
+field feedback, an alert only for blocking errors.
+- Empty lists render an empty state with a call to action.
+
 ## Emoji Semantics
 
 Use emoji as stable semantic markers, not decoration. Emoji carry transportable meaning across command descriptions, inline menu rows, message headings, status copy, and tests. Before adding a new UI emoji, either reuse one below or extend this registry in the same change.

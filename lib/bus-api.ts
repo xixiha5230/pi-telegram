@@ -153,11 +153,15 @@ export function createTelegramBusAwareApiRuntime(
         ? deps.directRuntime.getUpdates(body, signal)
         : rejectTelegramDirectOwnership("getUpdates");
     },
-    setMyCommands(commands): Promise<boolean> {
+    setMyCommands(commands, options): Promise<boolean> {
+      const body = {
+        commands,
+        ...(options?.languageCode ? { language_code: options.languageCode } : {}),
+      };
       return deps.ownsDirect()
-        ? deps.directRuntime.setMyCommands(commands)
+        ? deps.directRuntime.setMyCommands(commands, options)
         : deps
-            .callFollowerApi("call", ["setMyCommands", { commands }])
+            .callFollowerApi("call", ["setMyCommands", body])
             .then(asBoolean);
     },
     sendChatAction(

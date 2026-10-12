@@ -18,6 +18,19 @@ import {
   type TelegramSectionRegistry,
 } from "./sections.ts";
 import type { TelegramVoiceReplyMode } from "./voice.ts";
+import {
+  isTelegramLocale,
+  TELEGRAM_DEFAULT_LOCALE,
+  TELEGRAM_SUPPORTED_LOCALES,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
+import {
+  buildTelegramBreadcrumbHtml,
+  buildTelegramMainMenuRow,
+  formatTelegramToggleButtonLabel,
+  telegramUiTranslator,
+} from "./ui.ts";
 
 export type TelegramSettingsMenuReplyMarkup = TelegramInlineKeyboardMarkup;
 
@@ -31,6 +44,8 @@ export interface TelegramSettingsStateDeps {
   getVoiceReplyMode: () => TelegramVoiceReplyMode;
   isVoiceReplyModeConfigured: () => boolean;
   isAutomaticThreadCleanupEnabled: () => boolean;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
 }
 
 export interface TelegramSettingsMutationDeps extends TelegramSettingsStateDeps {
@@ -47,6 +62,8 @@ export interface TelegramSettingsMutationDeps extends TelegramSettingsStateDeps 
   ) => Promise<void>;
   setTimeInjectionMode: (mode: TelegramTimeMode) => Promise<void>;
   setAutomaticThreadCleanupEnabled: (enabled: boolean) => Promise<void>;
+  /** Persist an explicit UI locale override. */
+  setLocale?: (locale: TelegramLocale) => void | Promise<void>;
   reviewInactiveThreads?: () => Promise<{ count: number; operationId?: string }>;
   cleanInactiveThreads?: (operationId: string) => Promise<{
     deleted: number; outcomeUnknown: number; blocked?: number;
@@ -172,8 +189,14 @@ function getVoiceReplyModeSetting(
   return configured ? mode : "manual";
 }
 
-export function buildTelegramSettingsMenuText(): string {
-  return SETTINGS_MENU_TITLE;
+export function buildTelegramSettingsMenuText(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return [
+    buildTelegramBreadcrumbHtml([t(locale, "settings.title"), "home", "settings"]),
+    "",
+    `<blockquote>${t(locale, "settings.subtitle")}</blockquote>`,
+  ].join("\n");
 }
 
 export function buildThreadDisplaySettingsText(
@@ -317,6 +340,7 @@ export function buildTelegramSettingsMenuReplyMarkup(
   activityVerbosity: TelegramActivityVerbosity = "quiet",
   threadDisplayMode?: TelegramThreadDisplayMode,
   threadDisplayCustom = false,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramSettingsMenuReplyMarkup {
   const hasRenderingMode =
     assistantRenderingModeOrVoiceReplyMode === "rich" ||
@@ -339,20 +363,24 @@ export function buildTelegramSettingsMenuReplyMarkup(
     : typeof sectionRegistryOrVoiceReplyModeConfigured === "boolean"
       ? sectionRegistryOrVoiceReplyModeConfigured
       : true;
+  const translate = telegramUiTranslator(locale);
   const rows: Array<Array<{ text: string; callback_data: string }>> = [
-    [{ text: "⬆️ Main menu", callback_data: "menu:back" }],
+    [buildTelegramMainMenuRow(translate)],
   ];
   const settingsButtons: Array<{ text: string; callback_data: string }> = [
     {
-      text: `📝 Draft previews: ${draftPreviewsEnabled ? "on" : "off"}`,
+      text: formatTelegramToggleButtonLabel(
+        t(locale, "settings.draftPreviews"),
+        draftPreviewsEnabled,
+      ),
       callback_data: "settings:open:draft-previews",
     },
     {
-      text: `🧾 Rendering: ${assistantRenderingMode}`,
+      text: `${t(locale, "settings.rendering")}: ${assistantRenderingMode}`,
       callback_data: "settings:open:assistant-rendering",
     },
     {
-      text: `👄 Voice reply: ${getTelegramSettingsStateValueLabel(
+      text: `${t(locale, "settings.voiceReply")}: ${getTelegramSettingsStateValueLabel(
           getVoiceReplyModeLabel(
             getVoiceReplyModeSetting(
               voiceReplyMode,
@@ -363,21 +391,24 @@ export function buildTelegramSettingsMenuReplyMarkup(
       callback_data: "settings:open:voice-reply",
     },
     {
-      text: `🔬 Activity: ${activityVerbosity}`,
+      text: `${t(locale, "settings.activity")}: ${activityVerbosity}`,
       callback_data: "settings:open:activity-verbosity",
     },
     {
-      text: `🕒 Time injection: ${getTelegramSettingsStateValueLabel(timeInjectionMode)}`,
+      text: `${t(locale, "settings.timeInjection")}: ${getTelegramSettingsStateValueLabel(timeInjectionMode)}`,
       callback_data: "settings:open:time-injection",
     },
   ];
   if (threadDisplayMode) settingsButtons.push(
     {
-      text: `🧹 Thread cleanup: ${automaticThreadCleanupEnabled ? "on" : "off"}`,
+      text: formatTelegramToggleButtonLabel(
+        t(locale, "settings.threadCleanup"),
+        automaticThreadCleanupEnabled,
+      ),
       callback_data: "settings:open:automatic-thread-cleanup",
     },
     {
-      text: `🧵 Thread display: ${threadDisplayCustom ? "custom" : threadDisplayMode}`,
+      text: `${t(locale, "settings.threadDisplay")}: ${threadDisplayCustom ? "custom" : threadDisplayMode}`,
       callback_data: "settings:open:thread-display",
     },
   );
@@ -390,6 +421,10 @@ export function buildTelegramSettingsMenuReplyMarkup(
       })),
     );
   }
+  settingsButtons.push({
+    text: `${t(locale, "settings.language")}: ${locale}`,
+    callback_data: "settings:open:language",
+  });
   rows.push(...settingsButtons.map((button) => [button]));
   return { inline_keyboard: rows };
 }
@@ -403,7 +438,7 @@ export async function openTelegramSettingsMenu<
   const state = await deps.getModelMenuState();
   const messageId = await deps.sendSettingsMenu(
     state,
-    buildTelegramSettingsMenuText(),
+    buildTelegramSettingsMenuText(deps.getLocale?.()),
     buildTelegramSettingsMenuReplyMarkup(
       deps.areDraftPreviewsEnabled(),
       deps.getAssistantRenderingMode(),
@@ -415,6 +450,7 @@ export async function openTelegramSettingsMenu<
       deps.getActivityVerbosity(),
       deps.getThreadDisplayMode?.(),
       deps.isThreadDisplayCustom?.() ?? false,
+      deps.getLocale?.(),
     ),
   );
   if (messageId === undefined) return;
@@ -432,6 +468,28 @@ function threadDisplayModeLabel(mode: TelegramThreadDisplayMode): string {
     case "state": return "state";
     default: return "letters";
   }
+}
+
+export function buildLanguageSettingsText(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return [
+    `<b>${t(locale, "settings.language")}:</b>`,
+    "",
+    `<blockquote>${t(locale, "settings.subtitle")}</blockquote>`,
+  ].join("\n");
+}
+
+export function buildLanguageSettingsReplyMarkup(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): TelegramSettingsMenuReplyMarkup {
+  return { inline_keyboard: [
+    [{ text: t(locale, "common.back"), callback_data: "settings:list" }],
+    ...TELEGRAM_SUPPORTED_LOCALES.map((value) => [{
+      text: `${value === locale ? "🟢 " : ""}${value}`,
+      callback_data: `settings:set:language:${value}`,
+    }]),
+  ] };
 }
 
 export function buildThreadDisplaySettingsReplyMarkup(
@@ -567,7 +625,7 @@ export async function updateTelegramSettingsMenuMessage(
   sectionRegistry?: TelegramSectionRegistry,
 ): Promise<void> {
   await deps.updateSettingsMessage(
-    buildTelegramSettingsMenuText(),
+    buildTelegramSettingsMenuText(deps.getLocale?.()),
     buildTelegramSettingsMenuReplyMarkup(
       deps.areDraftPreviewsEnabled(),
       deps.getAssistantRenderingMode(),
@@ -579,6 +637,7 @@ export async function updateTelegramSettingsMenuMessage(
       deps.getActivityVerbosity(),
       deps.getThreadDisplayMode?.(),
       deps.isThreadDisplayCustom?.() ?? false,
+      deps.getLocale?.(),
     ),
   );
 }
@@ -650,6 +709,19 @@ export async function handleTelegramSettingsMenuCallbackAction(
   deps: TelegramSettingsMenuCallbackDeps,
 ): Promise<boolean> {
   if (!data?.startsWith("settings:")) return false;
+  if (data === "settings:open:language" || data.startsWith("settings:set:language:")) {
+    if (data.startsWith("settings:set:language:")) {
+      const next = data.slice("settings:set:language:".length);
+      if (isTelegramLocale(next)) await deps.setLocale?.(next);
+    }
+    const current = deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE;
+    await deps.updateSettingsMessage(
+      buildLanguageSettingsText(current),
+      buildLanguageSettingsReplyMarkup(current),
+    );
+    await deps.answerCallbackQuery(callbackQueryId);
+    return true;
+  }
   if (data === "settings:open:thread-display" || data.startsWith("settings:set:thread-display:")) {
     if (!deps.getThreadDisplayMode?.() || !deps.setThreadDisplayMode) {
       await deps.answerCallbackQuery(callbackQueryId, "Thread display requires Threaded Mode and a connected instance.");

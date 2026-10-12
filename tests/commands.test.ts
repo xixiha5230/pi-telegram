@@ -56,6 +56,7 @@ import {
   parseTelegramCommand,
   parseTelegramRequestedThreadName,
   registerTelegramBotCommands,
+  getTelegramBuiltinBotCommands,
   registerTelegramCommand,
   registerTelegramBridgeCommands,
   TELEGRAM_APP_MENU_INTRO_HTML,
@@ -149,17 +150,9 @@ test("Command helpers expose Telegram bot command definitions", () => {
     formatTelegramPiCommandHtml("/telegram connect <profile>"),
     "<code>/telegram connect &lt;profile&gt;</code>",
   );
-  for (const command of [
-    "new",
-    "start",
-    "compact",
-    "next",
-    "continue",
-    "abort",
-    "stop",
-  ]) {
-    assert.match(TELEGRAM_APP_MENU_INTRO_HTML, new RegExp(` /${command} —`));
-  }
+  assert.match(TELEGRAM_APP_MENU_INTRO_HTML, /^<b>Pi Telegram<\/b>/);
+  assert.match(TELEGRAM_APP_MENU_INTRO_HTML, /<blockquote>/);
+  assert.doesNotMatch(TELEGRAM_APP_MENU_INTRO_HTML, /\/start —/);
   assert.doesNotMatch(
     TELEGRAM_APP_MENU_INTRO_HTML,
     /<code>\/(?:start|name|compact|next|continue|abort|stop|name)<\/code>/,
@@ -204,7 +197,12 @@ test("Command helpers register Telegram bot commands through deps", async () => 
       calls.push(commands);
     },
   })();
-  assert.deepEqual(calls, [TELEGRAM_BOT_COMMANDS, TELEGRAM_BOT_COMMANDS]);
+  assert.deepEqual(calls, [
+    TELEGRAM_BOT_COMMANDS,
+    getTelegramBuiltinBotCommands("zh-CN"),
+    TELEGRAM_BOT_COMMANDS,
+    getTelegramBuiltinBotCommands("zh-CN"),
+  ]);
 });
 
 test("Command helpers coalesce concurrent bot command sync", async () => {
@@ -226,8 +224,9 @@ test("Command helpers coalesce concurrent bot command sync", async () => {
   assert.equal(calls, 1);
   finish?.();
   await Promise.all([first, joined]);
-  await registrar();
   assert.equal(calls, 2);
+  await registrar();
+  assert.equal(calls, 4);
 });
 
 test("Command helpers keep extension Telegram bot commands hidden by default", async () => {
@@ -243,7 +242,10 @@ test("Command helpers keep extension Telegram bot commands hidden by default", a
       calls.push(commands);
     },
   });
-  assert.deepEqual(calls, [TELEGRAM_BOT_COMMANDS]);
+  assert.deepEqual(calls, [
+    TELEGRAM_BOT_COMMANDS,
+    getTelegramBuiltinBotCommands("zh-CN"),
+  ]);
   dispose();
   clearTelegramExtensionCommands();
 });
@@ -268,6 +270,11 @@ test("Command helpers register extension Telegram bot commands when visible", as
       ...TELEGRAM_BOT_COMMANDS.slice(0, 6),
       { command: "fresh", description: "🆕 Start fresh" },
       ...TELEGRAM_BOT_COMMANDS.slice(6),
+    ],
+    [
+      ...getTelegramBuiltinBotCommands("zh-CN").slice(0, 6),
+      { command: "fresh", description: "🆕 Start fresh" },
+      ...getTelegramBuiltinBotCommands("zh-CN").slice(6),
     ],
   ]);
   dispose();

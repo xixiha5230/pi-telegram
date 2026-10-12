@@ -5,6 +5,8 @@
  */
 
 import type { TelegramInlineKeyboardMarkup } from "./keyboard.ts";
+import { TELEGRAM_DEFAULT_LOCALE, type TelegramLocale } from "./i18n.ts";
+import { buildTelegramMainMenuRow, telegramUiTranslator } from "./ui.ts";
 import type { TelegramModelMenuState } from "./menu.ts";
 import type { MenuModel } from "./model.ts";
 import * as Queue from "./queue.ts";
@@ -80,8 +82,9 @@ function formatSkippedTelegramQueuePosition(position: number): string {
 function buildTelegramQueueMenuReplyMarkup(
   items: readonly TelegramQueueMenuItem[],
   emptyRefreshIndex = 0,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): TelegramQueueMenuReplyMarkup {
-  const backRow = [{ text: "⬆️ Main menu", callback_data: "menu:back" }];
+  const backRow = [buildTelegramMainMenuRow(telegramUiTranslator(locale))];
   const nextEmptyRefreshIndex =
     (emptyRefreshIndex + 1) % EMPTY_QUEUE_REFRESH_TITLES.length;
   const refreshData =
@@ -213,6 +216,8 @@ function buildTelegramQueueItemSubmenuReplyMarkup(
 
 interface TelegramQueueMenuCallbackDeps<Context = unknown> {
   getQueuedItems: () => TelegramQueueMenuItem[];
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   findItem: (
     chatId: number,
     replyToMessageId: number,
@@ -359,7 +364,11 @@ async function updateTelegramQueueMenuList<Context>(
     replyChatId,
     replyMessageId,
     getTelegramQueueMenuListText(items, emptyRefreshIndex),
-    buildTelegramQueueMenuReplyMarkup(items, emptyRefreshIndex),
+    buildTelegramQueueMenuReplyMarkup(
+      items,
+      emptyRefreshIndex,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+    ),
   );
   await deps.answerCallbackQuery(callbackQueryId, notice);
 }
@@ -606,6 +615,8 @@ export function createTelegramQueueMenuRuntime<
     ctx: Context,
   ) => Promise<void>;
   updateStatus: (ctx: Context) => void;
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
 }): TelegramQueueMenuRuntime<Context> {
   const sendQueueMenuMessage = createQueueMenuSendMessageAdapter(
     deps.sendInteractiveMessage,
@@ -619,6 +630,7 @@ export function createTelegramQueueMenuRuntime<
       getModelMenuState: deps.getModelMenuState,
       storeModelMenuState: deps.storeModelMenuState,
       sendInteractiveMessage: sendQueueMenuMessage,
+      getLocale: deps.getLocale,
     }),
     handleCallbackQuery: createQueueMenuCallbackHandler<Context, TModel>({
       telegramQueueStore: deps.telegramQueueStore,
@@ -628,6 +640,7 @@ export function createTelegramQueueMenuRuntime<
       updateStatusMessage: deps.updateStatusMessage,
       answerCallbackQuery: deps.answerCallbackQuery,
       updateStatus: deps.updateStatus,
+      getLocale: deps.getLocale,
     }),
   };
 }
@@ -648,6 +661,7 @@ function createOpenQueueMenu<
     text: string,
     replyMarkup: TelegramQueueMenuReplyMarkup,
   ) => Promise<number | undefined>;
+  getLocale?: () => TelegramLocale;
 }) {
   return async (
     chatId: number,
@@ -661,7 +675,11 @@ function createOpenQueueMenu<
       chatId,
       replyToMessageId,
       text,
-      buildTelegramQueueMenuReplyMarkup(menuItems),
+      buildTelegramQueueMenuReplyMarkup(
+        menuItems,
+        0,
+        deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+      ),
     );
     if (messageId === undefined) return;
     state.messageId = messageId;
@@ -695,6 +713,7 @@ function createQueueMenuCallbackHandler<
     text?: string,
   ) => Promise<void>;
   updateStatus: (ctx: Context) => void;
+  getLocale?: () => TelegramLocale;
 }) {
   return async (
     query: TelegramQueueMenuCallbackQuery,
@@ -721,7 +740,11 @@ function createQueueMenuCallbackHandler<
         chatId,
         messageId,
         getTelegramQueueMenuListText(menuItems),
-        buildTelegramQueueMenuReplyMarkup(menuItems),
+        buildTelegramQueueMenuReplyMarkup(
+          menuItems,
+          0,
+          deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+        ),
       );
       state.mode = "queue";
       await deps.answerCallbackQuery(query.id);
@@ -767,6 +790,7 @@ function createQueueMenuCallbackHandler<
         updateQueueMessage: deps.editInteractiveMessage,
         answerCallbackQuery: deps.answerCallbackQuery,
         updateStatus: deps.updateStatus,
+        getLocale: deps.getLocale,
       },
     );
   };

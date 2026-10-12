@@ -782,6 +782,7 @@ export interface TelegramBridgeApiRuntime {
   ) => Promise<TelegramUpdate[]>;
   setMyCommands: (
     commands: readonly { command: string; description: string }[],
+    options?: { languageCode?: string },
   ) => Promise<boolean>;
   sendChatAction: (
     chatId: number,
@@ -2013,8 +2014,11 @@ export function createTelegramBridgeApiRuntime(
       ),
     getUpdates: (body, signal) =>
       callRecorded<TelegramUpdate[]>("getUpdates", body, { signal }),
-    setMyCommands: (commands) =>
-      callRecorded<boolean>("setMyCommands", { commands }),
+    setMyCommands: (commands, options) =>
+      callRecorded<boolean>("setMyCommands", {
+        commands,
+        ...(options?.languageCode ? { language_code: options.languageCode } : {}),
+      }),
     sendChatAction: (chatId, action, options) =>
       callRecorded<boolean>("sendChatAction", {
         chat_id: chatId,

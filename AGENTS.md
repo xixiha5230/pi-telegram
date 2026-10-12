@@ -53,6 +53,10 @@ report so the override is visible.
 7. **Keep the tree green.** `npm run typecheck`, `npm test`, the Domain DAG validator, and
    `npm run build` must pass before a change is called done. `dist/pi-telegram` is what
    actually runs, so rebuild before any live check.
+8. **One catalog for UI text.** Every operator-facing string is a key in `lib/i18n.ts`;
+   render paths translate through an injected locale and never hardcode new English. A
+   locale is explicit configuration or the paired owner's Telegram language — never
+   ambient process state.
 
 ## 4. How we work
 

@@ -479,6 +479,7 @@ export function createTelegramDaemon(
     routes,
     renderStatus,
     cleanup: core.cleanup,
+    getLocale: core.ports.configStore.getLocale,
     browse: (path) => workerBrowser.open(path),
     ...(options.control
       ? { control: options.control }
