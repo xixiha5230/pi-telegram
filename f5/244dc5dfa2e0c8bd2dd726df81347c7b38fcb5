@@ -1,0 +1,21 @@
+lib/bindings-core.ts
+  s_064644aacf1a0c::t_520a88bcee52d1 5-7
+docs/control-plane.md
+  s_064644aacf1a0c::t_6601023a517a98 10,176-177,186-187,190,192,194-196,509
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "f5244dc5dfa2e0c8bd2dd726df81347c7b38fcb5",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
