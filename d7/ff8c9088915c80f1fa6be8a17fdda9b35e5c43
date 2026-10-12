@@ -1,0 +1,21 @@
+.github/workflows/release.yml
+  s_064644aacf1a0c::t_9a423524e11532 109,139
+README.md
+  s_064644aacf1a0c::t_9a423524e11532 20,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "d7ff8c9088915c80f1fa6be8a17fdda9b35e5c43",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
