@@ -1,0 +1,58 @@
+CHANGELOG.md
+  s_064644aacf1a0c::t_dba17a8c0b144a 8
+  s_064644aacf1a0c::t_74600d00957007 7
+lib/daemon.ts
+  s_064644aacf1a0c::t_b67adb6ba95474 7-10
+docs/architecture.md
+  s_064644aacf1a0c::t_bdecc2b47081d5 97
+tests/integration.test.ts
+  s_064644aacf1a0c::t_889280faf7baf7 27
+lib/channel-posts.ts
+  s_064644aacf1a0c::t_a362af01f08a72 16,18-19
+lib/generative-apps.ts
+  s_064644aacf1a0c::t_8e0c14ff4c900e 7
+scripts/build-dist.mjs
+  s_064644aacf1a0c::t_8365233dfac342 44-54
+lib/bindings.ts
+  s_064644aacf1a0c::t_d5d6a4d3328932 38-41,943
+  s_064644aacf1a0c::t_df9352dbbf3f0a 9,29-30,130,153-155,163
+bin/pi-telegram-daemon.mjs
+  s_064644aacf1a0c::t_1beb4650d55d01 5-7,9-13,16,23-25,27
+tests/bindings.test.ts
+  s_064644aacf1a0c::t_f1e99189f792f3 19-20
+docs/control-plane.md
+  s_064644aacf1a0c::t_02d8b38083fbaa 504-506
+  s_064644aacf1a0c::t_ca545249596395 72-87
+  s_064644aacf1a0c::t_229f62c8cffe44 10
+tests/channel-posts.test.ts
+  s_064644aacf1a0c::t_24ab75e6bcf1bf 25-28
+lib/bridge.ts
+  s_064644aacf1a0c::t_1644acf8be7cb4 10-11,736,738,772,817,1291
+lib/bindings-core.ts
+  s_064644aacf1a0c::t_1ab99b05f108e7 19
+  s_064644aacf1a0c::t_83c8f06f307152 1-18,20-535
+lib/outbound-attachments.ts
+  s_064644aacf1a0c::t_ba6ab187170696 26
+lib/telegram-tools.ts
+  s_064644aacf1a0c::t_84428f0b7ecf85 1-478
+tests/outbound-attachments.test.ts
+  s_064644aacf1a0c::t_13ade53a1b2a5a 26-29
+tests/generative-apps.test.ts
+  s_064644aacf1a0c::t_94c2efbee4ab43 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "751517c2f67836c5b09a3a5425ab2ac1d827db9e",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
