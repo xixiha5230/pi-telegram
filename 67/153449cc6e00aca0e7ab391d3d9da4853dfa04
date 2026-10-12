@@ -1,0 +1,25 @@
+bin/pi-telegram-daemon.mjs
+  s_26bd2f22699832::t_0886fa0251ebe5 5-9,11-20,22,42-44,46-55,57-70,72,74-88,91-96,99-113,115-116,118-130,132-135,140-146
+package.json
+  s_26bd2f22699832::t_2c4c9164dc66af 3
+CHANGELOG.md
+  s_26bd2f22699832::t_35efec5c6ade6f 7-10,13
+package-lock.json
+  s_26bd2f22699832::t_10d06bc244c233 3,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.45-trip",
+  "base_commit_sha": "67153449cc6e00aca0e7ab391d3d9da4853dfa04",
+  "prompts": {},
+  "sessions": {
+    "s_26bd2f22699832": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a11fcb-1c4d-7737-8236-9d8e638cd399",
+        "model": "MiniMax-M3"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
