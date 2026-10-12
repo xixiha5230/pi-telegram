@@ -1,0 +1,30 @@
+lib/commands.ts
+  s_064644aacf1a0c::t_81be5708c80087 881-882,908-909,1961-1962
+  s_064644aacf1a0c::t_3b3179df83229a 936-937,1653-1655,1659-1660,1666-1669,1678,1680,1883-1885,1889-1890,1896-1899,1908,1910
+  s_064644aacf1a0c::t_d0fb775f8cb89d 2388,2516,2608
+  s_064644aacf1a0c::t_9ccbe19e231344 2540,2550,2562
+  s_064644aacf1a0c::t_21a81df8759bfe 1547-1548
+  s_064644aacf1a0c::t_da02ecf5cdb9fb 1526,1572,1600,1616,1990,2000,2023
+  s_064644aacf1a0c::t_8d619d22403197 1578-1579,2476
+  s_064644aacf1a0c::t_d6e1acae2e4862 2464
+lib/i18n.ts
+  s_064644aacf1a0c::t_11a6e02ccc3a97 247-248,252-259,462-463,467-474
+  s_064644aacf1a0c::t_bc729c7df49c8e 249-251,464-466
+  s_064644aacf1a0c::t_eda5868b2d52ac 260-261,475-476
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "8359b86639c9ef9d50f1f20ccc9f420fc324f7c6",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
