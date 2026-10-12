@@ -1,0 +1,97 @@
+lib/ui.ts
+  s_064644aacf1a0c::t_33d371918d0350 13,15-17,118-137
+  s_064644aacf1a0c::t_264f06971787a4 1-12,14,18-117,138
+tests/menu-settings.test.ts
+  s_064644aacf1a0c::t_29a1d926d94b59 211
+  s_064644aacf1a0c::t_d544b9696b1d36 189-192,216,444
+  s_064644aacf1a0c::t_7a17cc65108e67 225,238-240
+docs/ui-style.md
+  s_064644aacf1a0c::t_58ac25f8ccc46a 18-49
+lib/menu-settings.ts
+  s_064644aacf1a0c::t_675a7da683410c 24,424-427
+  s_064644aacf1a0c::t_9f5a20020a1147 65
+  s_064644aacf1a0c::t_504b8690089d3d 66
+  s_064644aacf1a0c::t_1e76e2efbc53df 192-195,197-199
+  s_064644aacf1a0c::t_5ecb077bf7c34d 47-48,441,453,628,640
+  s_064644aacf1a0c::t_8abe1b5018f6dc 473-494
+  s_064644aacf1a0c::t_dc4f28b2b91de7 22,712-724
+  s_064644aacf1a0c::t_38b5490ea00b79 196
+  s_064644aacf1a0c::t_c60a89429b0554 21,23,25-33,343,366,368,372-375,379,383,394,398,404-407,411
+lib/config.ts
+  s_064644aacf1a0c::t_79f0933a40fb1b 29-34,308-313
+  s_064644aacf1a0c::t_34fd166f1e488b 410-415,997-1010
+  s_064644aacf1a0c::t_303e680e7c7ea3 877
+lib/commands.ts
+  s_064644aacf1a0c::t_888d55c74275b8 15
+  s_064644aacf1a0c::t_66652ab621369a 332,336-360,365-367,369-373
+  s_064644aacf1a0c::t_77c7b62c6da203 1373-1375,1393-1405,1411,1413,1423,1429
+  s_064644aacf1a0c::t_c35c5925309fff 16-22,283-307,309
+lib/menu-queue.ts
+  s_064644aacf1a0c::t_00f7da4dedc5e3 8-9,85,87,219-220,367-371,678-682,743-747
+  s_064644aacf1a0c::t_a25a1e582c3cb1 618-619,664
+  s_064644aacf1a0c::t_b8ad83005e56e7 633,643,716,793
+docs/architecture.md
+  s_064644aacf1a0c::t_828f8309d47319 68
+AGENTS.md
+  s_064644aacf1a0c::t_c404263b049ed2 56-59
+lib/i18n.ts
+  s_064644aacf1a0c::t_e9037c902145c2 119-123,188-192
+  s_064644aacf1a0c::t_cec8620d2bd9d4 247-277
+  s_064644aacf1a0c::t_8e369e1ab5718f 111-118,180-187
+  s_064644aacf1a0c::t_bcdd2af6534bc5 1-110,124-179,193-246
+lib/worker-control.ts
+  s_064644aacf1a0c::t_030183d7926060 11,229-230,237-238,244,353-354,360,363,368,379-383
+CHANGELOG.md
+  s_064644aacf1a0c::t_a787d78bb2062a 7
+  s_064644aacf1a0c::t_b9039ce3a6a692 8
+tests/commands.test.ts
+  s_064644aacf1a0c::t_17672c8761dec5 153-155,200-205,228-229,245-248,274-277
+  s_064644aacf1a0c::t_098b9cac4ceecd 59
+lib/telegram-api.ts
+  s_064644aacf1a0c::t_a1f21ed079b7a6 785,2017-2021
+lib/menu-model.ts
+  s_064644aacf1a0c::t_f4c71e38c98d1f 9-17,279-288,1026,1029,1070,1076,1108,1111,1113,1119,1122,1154,1158,1160,1167,1170,1175,1177,1182,1188
+  s_064644aacf1a0c::t_94f8b0937c567b 155-156,1200-1204,1216-1220
+tests/sections.test.ts
+  s_064644aacf1a0c::t_0da426c01491ca 706
+  s_064644aacf1a0c::t_4a96031765fdd9 713
+lib/status.ts
+  s_064644aacf1a0c::t_48eb96701ed3d5 7-25,680,687,1622,1630,1638,1641,1644,1646
+  s_064644aacf1a0c::t_e0efe3824033bd 26
+lib/updates.ts
+  s_064644aacf1a0c::t_0161a0c2499a0e 5999
+  s_064644aacf1a0c::t_5d42f798c68ff8 9,3634-3635,4646,6013
+lib/menu-thinking.ts
+  s_064644aacf1a0c::t_175c02fba14776 14-21,132-135,140,142,158,162,164,178,197-201
+lib/bridge.ts
+  s_064644aacf1a0c::t_bb1c32b86a04dd 56,877
+  s_064644aacf1a0c::t_79ed4f6b95730a 946
+  s_064644aacf1a0c::t_b28e7ae253ebaf 947
+  s_064644aacf1a0c::t_0ab385c7da5f32 888
+  s_064644aacf1a0c::t_bb3e9a539de32c 911
+  s_064644aacf1a0c::t_8ecedab2b1cf4a 1214
+  s_064644aacf1a0c::t_a3387f59c2fd4f 880
+lib/bus-api.ts
+  s_064644aacf1a0c::t_7d2e77ae212e0a 156-160,162,164
+lib/daemon.ts
+  s_064644aacf1a0c::t_5983befcbff62f 482
+tests/i18n.test.ts
+  s_064644aacf1a0c::t_845a16cd95c236 1-29,34-133,144
+  s_064644aacf1a0c::t_c528472eff201d 30-33,134-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "ff020fe8785069fc94332d0e6001d7701a70a3b9",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
