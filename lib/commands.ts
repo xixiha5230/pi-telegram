@@ -878,6 +878,8 @@ export interface TelegramCommandActionDeps<TMessage, TContext> {
 }
 
 export interface TelegramStopCommandDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   hasAbortHandler: () => boolean;
   clearPendingModelSwitch: () => void;
   clearQueuedTelegramItems: () => number;
@@ -903,6 +905,8 @@ export interface TelegramCompactConfirmationReplyMarkup {
 }
 
 export interface TelegramCompactCommandDeps extends TelegramRuntimeEventRecorderPort {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   isIdle: () => boolean;
   hasPendingMessages: () => boolean;
   hasActiveTelegramTurn: () => boolean;
@@ -929,6 +933,8 @@ export interface TelegramCompactCommandDeps extends TelegramRuntimeEventRecorder
 }
 
 export interface TelegramCompactConfirmationDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   sendInteractiveMessage: (
     chatId: number,
     text: string,
@@ -1517,7 +1523,7 @@ export async function handleTelegramStopCommand(
         : "";
     if (clearedCount > 0) deps.updateStatus();
     await deps.sendTextReply(
-      formatTelegramInformationHeading("💤", `No active turn.${clearedSuffix}`),
+      formatTelegramInformationHeading("💤", `${t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.noActiveTurn")}${clearedSuffix}`),
       { parseMode: "HTML" },
     );
     return;
@@ -1538,6 +1544,8 @@ export async function handleTelegramStopCommand(
 }
 
 export async function handleTelegramAbortCommand(deps: {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   hasAbortHandler: () => boolean;
   hasActiveTelegramTurn: () => boolean;
   clearPendingModelSwitch: () => void;
@@ -1561,12 +1569,14 @@ export async function handleTelegramAbortCommand(deps: {
   deps.abortCurrentTurn();
   deps.updateStatus();
   await deps.sendTextReply(
-    formatTelegramInformationHeading("⏹️", "Aborted current turn."),
+    formatTelegramInformationHeading("⏹️", t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.abortedTurn")),
     { parseMode: "HTML" },
   );
 }
 
 export async function handleTelegramNextCommand(deps: {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   hasAbortHandler: () => boolean;
   isIdle: () => boolean;
   hasQueuedItems: () => boolean;
@@ -1587,7 +1597,7 @@ export async function handleTelegramNextCommand(deps: {
   deps.clearPendingModelSwitch();
   if (!deps.hasQueuedItems()) {
     await deps.sendTextReply(
-      formatTelegramInformationHeading("⌛", "Queue is empty"),
+      formatTelegramInformationHeading("⌛", t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.queueEmpty")),
       { parseMode: "HTML" },
     );
     return;
@@ -1603,7 +1613,7 @@ export async function handleTelegramNextCommand(deps: {
     await deps.sendTextReply(
       formatTelegramInformationHeading(
         "⏳",
-        "Pi is busy. Send /abort or /stop first.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.piBusy"),
       ),
       { parseMode: "HTML" },
     );
@@ -1640,19 +1650,23 @@ function dispatchNextQueuedTelegramTurnAfterCompact(
   deps.dispatchNextQueuedTelegramTurn();
 }
 
-export function buildTelegramNewConfirmationReplyMarkup(): TelegramCompactConfirmationReplyMarkup {
+export function buildTelegramNewConfirmationReplyMarkup(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): TelegramCompactConfirmationReplyMarkup {
   return {
     inline_keyboard: [
       [
-        { text: "🆕 Yes, start new", callback_data: "new:confirm" },
-        { text: "❌ No", callback_data: "new:cancel" },
+        { text: t(locale, "commands.yesStartNew"), callback_data: "new:confirm" },
+        { text: t(locale, "commands.no"), callback_data: "new:cancel" },
       ],
     ],
   };
 }
 
-export function getTelegramNewConfirmationHtml(): string {
-  return "<b>Start a new session?</b>";
+export function getTelegramNewConfirmationHtml(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return `<b>${t(locale, "commands.newSessionConfirm")}</b>`;
 }
 
 export async function openTelegramNewConfirmation(
@@ -1661,9 +1675,9 @@ export async function openTelegramNewConfirmation(
 ): Promise<void> {
   await deps.sendInteractiveMessage(
     target.chatId,
-    getTelegramNewConfirmationHtml(),
+    getTelegramNewConfirmationHtml(deps.getLocale?.()),
     "html",
-    buildTelegramNewConfirmationReplyMarkup(),
+    buildTelegramNewConfirmationReplyMarkup(deps.getLocale?.()),
     target.threadId !== undefined
       ? { target: { chatId: target.chatId, threadId: target.threadId } }
       : undefined,
@@ -1866,19 +1880,23 @@ export async function handleTelegramSessionsCallback(
   return true;
 }
 
-export function buildTelegramCompactConfirmationReplyMarkup(): TelegramCompactConfirmationReplyMarkup {
+export function buildTelegramCompactConfirmationReplyMarkup(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): TelegramCompactConfirmationReplyMarkup {
   return {
     inline_keyboard: [
       [
-        { text: "🗜 Yes, compact", callback_data: "compact:confirm" },
-        { text: "❌ No", callback_data: "compact:cancel" },
+        { text: t(locale, "commands.yesCompact"), callback_data: "compact:confirm" },
+        { text: t(locale, "commands.no"), callback_data: "compact:cancel" },
       ],
     ],
   };
 }
 
-export function getTelegramCompactConfirmationHtml(): string {
-  return "<b>Compact session?</b>";
+export function getTelegramCompactConfirmationHtml(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return `<b>${t(locale, "commands.compactConfirm")}</b>`;
 }
 
 export async function openTelegramCompactConfirmation(
@@ -1887,9 +1905,9 @@ export async function openTelegramCompactConfirmation(
 ): Promise<void> {
   await deps.sendInteractiveMessage(
     target.chatId,
-    getTelegramCompactConfirmationHtml(),
+    getTelegramCompactConfirmationHtml(deps.getLocale?.()),
     "html",
-    buildTelegramCompactConfirmationReplyMarkup(),
+    buildTelegramCompactConfirmationReplyMarkup(deps.getLocale?.()),
     target.threadId !== undefined
       ? { target: { chatId: target.chatId, threadId: target.threadId } }
       : undefined,
@@ -1940,6 +1958,8 @@ export async function handleTelegramCompactConfirmationCallback<TContext>(
 }
 
 export interface TelegramNewCommandDeps extends TelegramRuntimeEventRecorderPort {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   isIdle: () => boolean;
   hasPendingMessages: () => boolean;
   hasActiveTelegramTurn: () => boolean;
@@ -1967,7 +1987,7 @@ export async function handleTelegramNewCommand(
     await deps.sendTextReply(
       formatTelegramInformationHeading(
         "⏳",
-        "Cannot start a new session while Pi or the Telegram queue is busy. Wait for queued turns to finish or send /abort first.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.newBusy"),
       ),
       { parseMode: "HTML" },
     );
@@ -1977,7 +1997,7 @@ export async function handleTelegramNewCommand(
     await deps.sendTextReply(
       formatTelegramInformationHeading(
         "🚫",
-        "Session replacement is unavailable in this Pi runtime.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.sessionReplacementUnavailable"),
       ),
       { parseMode: "HTML" },
     );
@@ -2000,7 +2020,7 @@ export async function handleTelegramCompactCommand(
     await deps.sendTextReply(
       formatTelegramInformationHeading(
         "⏳",
-        "Cannot compact while Pi or the Telegram queue is busy. Wait for queued turns to finish or send /abort first.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.compactBusy"),
       ),
       { parseMode: "HTML" },
     );
@@ -2365,6 +2385,7 @@ async function handleTelegramCommandRuntime<
     {
       handleStop: async (nextMessage, commandCtx) => {
         await handleTelegramStopCommand({
+          getLocale: deps.getLocale,
           hasAbortHandler: deps.hasAbortHandler,
           clearPendingModelSwitch: deps.clearPendingModelSwitch,
           clearQueuedTelegramItems: () =>
@@ -2440,6 +2461,7 @@ async function handleTelegramCommandRuntime<
       },
       handleAbort: async (nextMessage, commandCtx) => {
         await handleTelegramAbortCommand({
+          getLocale: deps.getLocale,
           hasAbortHandler: deps.hasAbortHandler,
           hasActiveTelegramTurn: deps.hasActiveTelegramTurn,
           clearPendingModelSwitch: deps.clearPendingModelSwitch,
@@ -2451,6 +2473,7 @@ async function handleTelegramCommandRuntime<
       },
       handleNext: async (nextMessage, commandCtx) => {
         await handleTelegramNextCommand({
+          getLocale: deps.getLocale,
           hasAbortHandler: deps.hasAbortHandler,
           isIdle: () => deps.isIdle(commandCtx),
           hasQueuedItems: deps.hasQueuedTelegramItems,
@@ -2490,6 +2513,7 @@ async function handleTelegramCommandRuntime<
           return;
         }
         await handleTelegramNewCommand({
+          getLocale: deps.getLocale,
           isIdle: () => deps.isIdle(commandCtx),
           hasPendingMessages: () => deps.hasPendingMessages(commandCtx),
           hasActiveTelegramTurn: deps.hasActiveTelegramTurn,
@@ -2513,7 +2537,7 @@ async function handleTelegramCommandRuntime<
             await sendReplyFor(nextMessage)(
               formatTelegramInformationHeading(
                 "⚠️",
-                "Unknown session number. Send /sessions to list sessions again.",
+                t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.unknownSessionNumber"),
               ),
               { parseMode: "HTML" },
             );
@@ -2523,7 +2547,7 @@ async function handleTelegramCommandRuntime<
             await sendReplyFor(nextMessage)(
               formatTelegramInformationHeading(
                 "🚫",
-                "Session switching is unavailable in this Pi runtime.",
+                t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.sessionSwitchUnavailableRuntime"),
               ),
               { parseMode: "HTML" },
             );
@@ -2535,7 +2559,7 @@ async function handleTelegramCommandRuntime<
             await sendReplyFor(nextMessage)(
               formatTelegramInformationHeading(
                 "⚠️",
-                "Could not start the session switch. Try again.",
+                t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "commands.sessionSwitchStartFailed"),
               ),
               { parseMode: "HTML" },
             );
@@ -2581,6 +2605,7 @@ async function handleTelegramCommandRuntime<
           return;
         }
         await handleTelegramCompactCommand({
+          getLocale: deps.getLocale,
           isIdle: () => deps.isIdle(commandCtx),
           hasPendingMessages: () => deps.hasPendingMessages(commandCtx),
           hasActiveTelegramTurn: deps.hasActiveTelegramTurn,
