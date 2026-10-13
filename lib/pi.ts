@@ -26,6 +26,10 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
+import type { PiSettingsManager } from "./settings-manager.ts";
+export type { PiSettingsManager } from "./settings-manager.ts";
+export { createScopedModelPatternPersister } from "./settings-manager.ts";
+
 export type {
   AgentEndEvent,
   AgentSettledEvent,
@@ -79,13 +83,6 @@ export interface ToolExecutionEndEvent {
   toolName: string;
   result: unknown;
   isError: boolean;
-}
-
-export interface PiSettingsManager {
-  reload: () => Promise<void>;
-  flush: () => Promise<void>;
-  getEnabledModels: () => string[] | undefined;
-  setEnabledModels: (patterns: string[] | undefined) => void;
 }
 
 export type PiSlashCommandInfo = SlashCommandInfo;
@@ -239,22 +236,6 @@ export async function createSettingsManager(
   // the SDK boundary instead of leaking host distinctions into menu domains.
   const factory = SettingsManager as unknown as PiSettingsManagerFactory;
   return normalizeSettingsManager(await factory.create(cwd));
-}
-
-export function createScopedModelPatternPersister(deps: {
-  createSettingsManager: (
-    cwd: string,
-  ) => PiSettingsManager | PromiseLike<PiSettingsManager>;
-  clearCachedModelMenuInputs: () => void;
-}): (patterns: string[], ctx: ExtensionContext) => Promise<void> {
-  return async (patterns, ctx) => {
-    const settingsManager = await deps.createSettingsManager(ctx.cwd);
-    settingsManager.setEnabledModels(
-      patterns.length > 0 ? patterns : undefined,
-    );
-    await settingsManager.flush();
-    deps.clearCachedModelMenuInputs();
-  };
 }
 
 export function getExtensionContextModel(

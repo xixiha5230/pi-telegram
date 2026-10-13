@@ -50,7 +50,17 @@ export interface TelegramSetupDeps {
   notify: (message: string, level: "info" | "error") => void;
   startPolling: () => unknown | Promise<unknown>;
   updateStatus: () => void;
+  /** True when `cluster.leader` is `daemon`: this Pi instance never polls. */
+  isDaemonManaged?: () => boolean;
+  /** Locale-bound translator injected by the caller; falls back to English. */
+  translate?: TelegramSetupTranslator;
 }
+
+/** Locale-bound message translator. Injected so this leaf domain stays import-free. */
+export type TelegramSetupTranslator = (
+  key: string,
+  params?: Record<string, string | number>,
+) => string;
 
 export interface TelegramSetupPromptContext {
   hasUI: boolean;
@@ -79,6 +89,10 @@ export interface TelegramSetupPromptRuntimeDeps<
   persistConfig: (config: TelegramSetupConfig) => Promise<void>;
   startPolling: (ctx: TContext) => unknown | Promise<unknown>;
   updateStatus: (ctx: TContext) => void;
+  /** True when `cluster.leader` is `daemon`: this Pi instance never polls. */
+  isDaemonManaged?: () => boolean;
+  /** Locale-bound translator injected by the caller; falls back to English. */
+  translate?: TelegramSetupTranslator;
   recordRuntimeEvent?: (
     category: string,
     error: unknown,
@@ -172,7 +186,8 @@ export async function runTelegramSetup(
   };
   if (!resolvedToken) {
     deps.notify(
-      describeBotToken(submittedToken) ?? "Invalid Telegram bot token",
+      describeBotToken(submittedToken) ??
+        (deps.translate?.("setup.invalidToken") ?? "Invalid Telegram bot token"),
       "error",
     );
     return { status: "validation-failed" };
@@ -182,22 +197,44 @@ export async function runTelegramSetup(
     data = await deps.getMe(resolvedToken);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    deps.notify(`Telegram API check failed: ${message}`, "error");
+    deps.notify(
+      deps.translate?.("setup.apiFailed", { message }) ??
+        `Telegram API check failed: ${message}`,
+      "error",
+    );
     return { status: "validation-failed" };
   }
   if (!data.ok || !data.result) {
-    deps.notify(data.description || "Invalid Telegram bot token", "error");
+    deps.notify(
+      data.description ??
+        (deps.translate?.("setup.invalidToken") ?? "Invalid Telegram bot token"),
+      "error",
+    );
     return { status: "validation-failed" };
   }
   nextConfig.botId = data.result.id;
   nextConfig.botUsername = data.result.username;
   await deps.persistConfig(nextConfig);
+  const username = nextConfig.botUsername ?? "unknown";
   deps.notify(
-    `Telegram bot connected: @${nextConfig.botUsername ?? "unknown"}`,
+    deps.translate?.("setup.connected", { username }) ??
+      `Telegram bot connected: @${username}`,
     "info",
   );
+  if (deps.isDaemonManaged?.()) {
+    // The daemon owns Telegram, so this Pi instance must not poll. Point the
+    // operator at the daemon start flow instead of the pairing prompt.
+    deps.notify(
+      deps.translate?.("setup.daemonManaged") ??
+        "Telegram is daemon-managed. Start it with /telegram daemon start; the daemon owns Telegram and handles pairing, then send /start to your bot.",
+      "info",
+    );
+    deps.updateStatus();
+    return { status: "success", config: nextConfig };
+  }
   deps.notify(
-    "Send /start to your bot in Telegram to pair this extension with your account.",
+    deps.translate?.("setup.pairPrompt") ??
+      "Send /start to your bot in Telegram to pair this extension with your account.",
     "info",
   );
   let startResult: unknown;
@@ -205,7 +242,11 @@ export async function runTelegramSetup(
     startResult = await deps.startPolling();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    deps.notify(`Telegram polling failed: ${message}`, "error");
+    deps.notify(
+      deps.translate?.("setup.pollingFailed", { message }) ??
+        `Telegram polling failed: ${message}`,
+      "error",
+    );
     deps.updateStatus();
     return { status: "polling-failed", config: nextConfig };
   }
@@ -248,6 +289,8 @@ export function createTelegramSetupPromptRuntime<
         notify: (message, level) => ctx.ui.notify(message, level),
         startPolling: () => deps.startPolling(ctx),
         updateStatus: () => deps.updateStatus(ctx),
+        isDaemonManaged: deps.isDaemonManaged,
+        translate: deps.translate,
       });
     } catch (error) {
       deps.recordRuntimeEvent?.("setup", error);

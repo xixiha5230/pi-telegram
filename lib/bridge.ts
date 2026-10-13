@@ -34,7 +34,7 @@ import * as Model from "./model.ts";
 import * as Outbound from "./outbound.ts";
 import * as Ownership from "./ownership.ts";
 import * as Paths from "./paths.ts";
-import * as Pi from "./pi.ts";
+import type * as Pi from "./pi.ts";
 import type { TelegramBridgeHost } from "./host.ts";
 import * as Polling from "./polling.ts";
 import * as Preview from "./preview.ts";
@@ -45,6 +45,7 @@ import * as Recovery from "./recovery.ts";
 import * as Replies from "./replies.ts";
 import * as Routing from "./routing.ts";
 import * as Runtime from "./runtime.ts";
+import { createScopedModelPatternPersister } from "./settings-manager.ts";
 import * as Sections from "./sections.ts";
 import * as Status from "./status.ts";
 import * as Sync from "./sync.ts";
@@ -1160,7 +1161,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     resolveTimeLine: timeInjectionRuntime.resolveLine,
     getThinkingLevel,
     setThinkingLevel,
-    persistScopedModelPatterns: Pi.createScopedModelPatternPersister({
+    persistScopedModelPatterns: createScopedModelPatternPersister({
       createSettingsManager: host.helpers.createSettingsManager,
       clearCachedModelMenuInputs: modelMenuRuntime.clearCachedInputs,
     }),

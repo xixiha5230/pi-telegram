@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+## 0.54.1: Standalone daemon startup fix
+
+- `Standalone daemon startup fix`: The daemon no longer imports the Pi SDK. The scoped-model persister moved to a schema-free module and session listing loads `SessionManager` on demand, so `pi.js` is absent from the daemon graph and `pi-telegram-daemon` starts without `@earendil-works/pi-coding-agent`. `/telegram setup` is now daemon-aware: under `cluster.leader: "daemon"` it saves the token and points at `/telegram daemon start` instead of attempting polling and failing.
+
 ## 0.54.0: Localized modern Telegram UI
 
 - `Telegram UI i18n and modernization`: Every rendered surface resolves a UI locale (`telegram.json` `locale` > owner's Telegram `language_code` > English) and translates through one catalog (`lib/i18n.ts`) with `en` and `zh-CN`; `setMyCommands` registers per `language_code`. `lib/ui.ts` adds hero, breadcrumb, and toggle primitives. `/start` is a hero plus buttons, Settings uses toggle rows and a breadcrumb, and every menu, alert, confirmation, result, daemon layer, session, and status line localizes.

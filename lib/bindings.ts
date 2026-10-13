@@ -10,6 +10,7 @@ import type * as ChannelPosts from "./channel-posts.ts";
 import * as CommandTemplates from "./command-templates.ts";
 import * as Commands from "./commands.ts";
 import * as Config from "./config.ts";
+import { t, type TelegramMessageKey } from "./i18n.ts";
 import * as Delivery from "./delivery.ts";
 import * as Keyboard from "./keyboard.ts";
 import * as Lifecycle from "./lifecycle.ts";
@@ -268,6 +269,10 @@ export function registerTelegramCommandsAndTools({
           Config.getTelegramBotTokenDiagnostic(value, process.env),
         persistConfig: persistSetupConfig,
         startPolling: lockedPollingRuntime.start,
+        isDaemonManaged: () =>
+          Config.createTelegramClusterLeaderModeGetter(configStore)() === "daemon",
+        translate: (key, params) =>
+          t(configStore.getLocale(), key as TelegramMessageKey, params),
         updateStatus,
         recordRuntimeEvent,
       });
@@ -275,7 +280,10 @@ export function registerTelegramCommandsAndTools({
       if (completion.status === "success") {
         queueAgentConnectionContext(true);
         if (profileName) {
-          ctx.ui.notify(`Profile "${profileName}" saved and connected.`, "info");
+          ctx.ui.notify(
+            t(configStore.getLocale(), "setup.profileSaved", { profile: profileName }),
+            "info",
+          );
         }
       }
     },

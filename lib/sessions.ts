@@ -4,12 +4,23 @@
  * Owns cross-project session discovery, project grouping, and interactive session switch flows.
  */
 
-import {
-  SessionManager,
-  type ExtensionCommandContext,
-  type SessionInfo,
+import type {
+  ExtensionCommandContext,
+  SessionInfo,
 } from "./pi.ts";
 import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
+
+/**
+ * Load the Pi `SessionManager` on demand. Session listing only runs from a Pi
+ * host command, so a non-Pi host such as the daemon never loads the Pi SDK.
+ */
+async function getSessionManager(): Promise<{
+  listAll: () => Promise<SessionInfo[]>;
+  list: (cwd: string) => Promise<SessionInfo[]>;
+}> {
+  const { SessionManager } = await import("./pi.ts");
+  return SessionManager;
+}
 
 export interface TelegramProjectSessionSummary {
   path: string;
@@ -178,21 +189,21 @@ export function groupTelegramSessionsByProject(
 }
 
 export async function listTelegramProjects(): Promise<TelegramProjectSummary[]> {
-  const infos = await SessionManager.listAll();
+  const infos = await (await getSessionManager()).listAll();
   return groupTelegramSessionsByProject(infos.map(summarizeSession));
 }
 
 export async function listTelegramProjectSessions(
   cwd: string,
 ): Promise<TelegramProjectSessionSummary[]> {
-  const infos = await SessionManager.list(cwd);
+  const infos = await (await getSessionManager()).list(cwd);
   return infos.map(summarizeSession).sort((a, b) => b.modifiedMs - a.modifiedMs);
 }
 
 export async function listAllTelegramSessions(): Promise<
   TelegramProjectSessionSummary[]
 > {
-  const infos = await SessionManager.listAll();
+  const infos = await (await getSessionManager()).listAll();
   return infos.map(summarizeSession).sort((a, b) => b.modifiedMs - a.modifiedMs);
 }
 
@@ -352,9 +363,10 @@ export async function runTelegramOpenCommand(
     await switchTelegramSession(ctx, target, locale);
     return;
   }
+  const sessionManager = await getSessionManager();
   const [all, current] = await Promise.all([
-    SessionManager.listAll(),
-    SessionManager.list(ctx.cwd),
+    sessionManager.listAll(),
+    sessionManager.list(ctx.cwd),
   ]);
   const match = [...current, ...all].find((info) => info.id === target);
   if (!match) {
