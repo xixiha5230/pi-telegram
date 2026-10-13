@@ -101,6 +101,7 @@ export interface TelegramModelMenuRuntimeOptions<
   TContext extends TelegramModelMenuRuntimeContext<TModel>,
   TModel extends MenuModel = MenuModel,
 > {
+  locale?: TelegramLocale;
   chatId: number;
   threadId?: number;
   activeModel: TModel | undefined;
@@ -128,6 +129,8 @@ export interface TelegramModelMenuStateBuilderDeps<
   TContext extends TelegramModelMenuStateBuilderContext<TModel> =
     TelegramModelMenuStateBuilderContext<TModel>,
 > {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   runtime: TelegramModelMenuRuntime<TModel>;
   createSettingsManager: (
     cwd: string,
@@ -159,6 +162,8 @@ export interface TelegramMenuMessageRuntimeDeps {
 export type TelegramModelMenuCallbackDeps<
   TModel extends MenuModel = MenuModel,
 > = {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   answerCallbackQuery: (
     callbackQueryId: string,
     text?: string,
@@ -194,6 +199,7 @@ export interface TelegramModelMenuOpenDeps<
 export interface BuildTelegramModelMenuStateParams<
   TModel extends MenuModel = MenuModel,
 > {
+  locale?: TelegramLocale;
   chatId: number;
   threadId?: number;
   activeModel: TModel | undefined;
@@ -243,6 +249,7 @@ export type TelegramModelCallbackPlan<TModel extends MenuModel = MenuModel> =
 export interface BuildTelegramModelCallbackPlanParams<
   TModel extends MenuModel = MenuModel,
 > {
+  locale?: TelegramLocale;
   data: string | undefined;
   state: TelegramModelMenuState<TModel>;
   activeModel: TModel | undefined;
@@ -516,6 +523,7 @@ export function createTelegramModelMenuStateBuilder<
   return async (chatId, ctx, threadId) => {
     const settingsManager = await deps.createSettingsManager(ctx.cwd);
     return deps.runtime.buildState({
+      locale: deps.getLocale?.(),
       chatId,
       threadId,
       activeModel: deps.getActiveModel(ctx),
@@ -576,7 +584,7 @@ export function buildTelegramModelMenuState<
   ) {
     note = params.cliScopedModelPatterns
       ? "No CLI scoped models matched the current auth configuration. Showing all available models."
-      : "No scoped models matched the current auth configuration. Showing all available models.";
+      : t(params.locale ?? TELEGRAM_DEFAULT_LOCALE, "model.noScopedMatch");
   }
   return {
     chatId: params.chatId,
@@ -621,6 +629,7 @@ export async function buildTelegramModelMenuStateRuntime<
   return {
     cachedInputs,
     state: buildTelegramModelMenuState({
+      locale: options.locale,
       chatId: options.chatId,
       threadId: options.threadId,
       activeModel: options.activeModel,
@@ -780,6 +789,7 @@ export function buildTelegramModelCallbackPlan<
 >(
   params: BuildTelegramModelCallbackPlanParams<TModel>,
 ): TelegramModelCallbackPlan<TModel> {
+  const locale = params.locale ?? TELEGRAM_DEFAULT_LOCALE;
   const action = parseTelegramModelMenuCallbackAction(params.data);
   if (!action) return { kind: "ignore" };
   if (action.action === "noop") return { kind: "answer" };
@@ -789,7 +799,7 @@ export function buildTelegramModelCallbackPlan<
       action.value,
     );
     if (scopeResult === "invalid") {
-      return { kind: "answer", text: "Unknown model scope." };
+      return { kind: "answer", text: t(locale, "model.unknownScope") };
     }
     if (scopeResult === "unchanged") {
       return { kind: "answer" };
@@ -813,7 +823,7 @@ export function buildTelegramModelCallbackPlan<
       action.value,
     );
     if (pageResult === "invalid") {
-      return { kind: "answer", text: "Invalid page." };
+      return { kind: "answer", text: t(locale, "model.invalidPage") };
     }
     params.state.mode = "model";
     if (pageResult === "unchanged") {
@@ -827,7 +837,7 @@ export function buildTelegramModelCallbackPlan<
       action.value,
     );
     if (detailResult === "invalid") {
-      return { kind: "answer", text: "Selected model is no longer available." };
+      return { kind: "answer", text: t(locale, "model.noLongerAvailable") };
     }
     return { kind: "update-menu" };
   }
@@ -839,12 +849,12 @@ export function buildTelegramModelCallbackPlan<
     if (params.state.canMutateScope === false) {
       return {
         kind: "answer",
-        text: "Model scope is controlled by CLI --models.",
+        text: t(locale, "model.scopeControlledByCli"),
       };
     }
     const selectionResult = getTelegramSelectedDetailModel(params.state);
     if (selectionResult.kind !== "selected") {
-      return { kind: "answer", text: "Selected model is no longer available." };
+      return { kind: "answer", text: t(locale, "model.noLongerAvailable") };
     }
     const model = selectionResult.selection.model;
     const enabled =
@@ -859,8 +869,8 @@ export function buildTelegramModelCallbackPlan<
       kind: "persist-scope",
       patterns: result.patterns,
       text: result.enabled
-        ? "Added to scoped models"
-        : "Removed from scoped models",
+        ? t(locale, "model.addedToScoped")
+        : t(locale, "model.removedFromScoped"),
     };
   }
   if (action.action !== "pick" && action.action !== "pick-selected") {
@@ -871,10 +881,10 @@ export function buildTelegramModelCallbackPlan<
       ? getTelegramSelectedDetailModel(params.state)
       : getTelegramModelSelection(params.state, action.value);
   if (selectionResult.kind === "invalid") {
-    return { kind: "answer", text: "Invalid model selection." };
+    return { kind: "answer", text: t(locale, "model.invalidSelection") };
   }
   if (selectionResult.kind === "missing") {
-    return { kind: "answer", text: "Selected model is no longer available." };
+    return { kind: "answer", text: t(locale, "model.noLongerAvailable") };
   }
   const selection = selectionResult.selection;
   if (modelsMatch(selection.model, params.activeModel)) {
@@ -894,7 +904,7 @@ export function buildTelegramModelCallbackPlan<
     if (!params.canRestartBusyRun) {
       return {
         kind: "answer",
-        text: "Pi is busy. Send /abort, /next, or /stop.",
+        text: t(locale, "model.piBusy"),
       };
     }
     return {
@@ -942,7 +952,10 @@ export async function handleTelegramModelMenuCallbackAction<
   params: BuildTelegramModelCallbackPlanParams<TModel>,
   deps: TelegramModelMenuCallbackDeps<TModel>,
 ): Promise<boolean> {
-  const plan = buildTelegramModelCallbackPlan(params);
+  const plan = buildTelegramModelCallbackPlan({
+    ...params,
+    locale: deps.getLocale?.(),
+  });
   if (plan.kind === "ignore") return false;
   if (plan.kind === "answer") {
     await deps.answerCallbackQuery(callbackQueryId, plan.text);
@@ -957,7 +970,7 @@ export async function handleTelegramModelMenuCallbackAction<
     if (!deps.persistScopedModelPatterns) {
       await deps.answerCallbackQuery(
         callbackQueryId,
-        "Scoped model persistence is unavailable.",
+        t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "model.scopedPersistenceUnavailable"),
       );
       return true;
     }
@@ -976,7 +989,7 @@ export async function handleTelegramModelMenuCallbackAction<
   }
   const changed = await deps.setModel(plan.selection.model);
   if (changed === false) {
-    await deps.answerCallbackQuery(callbackQueryId, "Model is not available.");
+    await deps.answerCallbackQuery(callbackQueryId, t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "model.notAvailable"));
     return true;
   }
   deps.setCurrentModel(plan.selection.model);
@@ -994,7 +1007,7 @@ export async function handleTelegramModelMenuCallbackAction<
     if (!restarted) {
       await deps.answerCallbackQuery(
         callbackQueryId,
-        "Pi is busy. Send /abort, /next, or /stop.",
+        t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "model.piBusy"),
       );
       return true;
     }

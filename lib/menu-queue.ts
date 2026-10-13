@@ -396,7 +396,7 @@ async function refreshStaleTelegramQueueMenuItem<Context>(
     replyChatId,
     replyMessageId,
     deps,
-    "Item no longer in queue.",
+    t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "queue.itemGone"),
   );
 }
 
@@ -528,7 +528,7 @@ async function updateTelegramQueueMenuPriority<Context>(
   );
   await deps.answerCallbackQuery(
     callbackQueryId,
-    updated.isPriority ? "Prioritized." : "Normal priority.",
+    updated.isPriority ? "Prioritized." : t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "queue.normalPriority"),
   );
 }
 
@@ -744,7 +744,7 @@ function createQueueMenuCallbackHandler<
       if (!state) {
         await deps.answerCallbackQuery(
           query.id,
-          "Interactive message expired.",
+          t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "common.expired"),
         );
         return true;
       }

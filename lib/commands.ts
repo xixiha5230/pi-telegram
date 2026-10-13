@@ -261,17 +261,34 @@ export function formatTelegramAutomaticThreadDisplayNameRestoredHeading(
   return `<b>✅ Automatic Thread display name restored as <i>${escapeHtml(name)}</i>.</b>`;
 }
 
-export const TELEGRAM_COMPACTION_STARTED_TEXT =
-  formatTelegramInformationHeading(
-    getTelegramCommandEmoji("compact"),
-    "Compaction started.",
-  );
-export const TELEGRAM_COMPACTION_COMPLETED_TEXT =
-  formatTelegramInformationHeading("✅", "Compaction completed.");
 export const TELEGRAM_COMPACTION_STARTED_MARKDOWN =
   `**${formatTelegramCommandEmojiPrefix("compact")}Compaction started.**`;
 export const TELEGRAM_COMPACTION_COMPLETED_MARKDOWN =
   "**✅ Compaction completed.**";
+
+export function getTelegramCompactionStartedText(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return formatTelegramInformationHeading(
+    getTelegramCommandEmoji("compact"),
+    t(locale, "commands.compactionStarted"),
+  );
+}
+export function getTelegramCompactionCompletedText(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return formatTelegramInformationHeading("✅", t(locale, "commands.compactionCompleted"));
+}
+export function getTelegramCompactionStartedMarkdown(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return `**${formatTelegramCommandEmojiPrefix("compact")}${t(locale, "commands.compactionStarted")}**`;
+}
+export function getTelegramCompactionCompletedMarkdown(
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
+  return `**✅ ${t(locale, "commands.compactionCompleted")}**`;
+}
 
 function formatTelegramBotCommandDescription(
   command: TelegramCommandEmojiName,
@@ -408,6 +425,8 @@ export type TelegramPollingStartRecoveryResult =
   | { kind: "blocked"; message: string };
 
 export interface TelegramBridgeCommandRegistrationDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   promptForConfig: (ctx: ExtensionCommandContext, profileName?: string) => Promise<void>;
   getStatusLines: (options?: TelegramBridgeStatusLineOptions) => string[];
   reloadConfig: () => Promise<void>;
@@ -456,7 +475,9 @@ export type TelegramThreadDisplayNameResetPort = (
   message?: string;
 }>;
 
-export function createTelegramThreadDisplayNameResetBinding(): {
+export function createTelegramThreadDisplayNameResetBinding(
+  deps: { getLocale?: () => TelegramLocale } = {},
+): {
   bind: (reset: TelegramThreadDisplayNameResetPort) => void;
   reset: TelegramThreadDisplayNameResetPort;
 } {
@@ -466,12 +487,14 @@ export function createTelegramThreadDisplayNameResetBinding(): {
     async reset(target) {
       return current
         ? current(target)
-        : { ok: false, message: "Thread display name reset is unavailable." };
+        : { ok: false, message: t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.nameResetUnavailable") };
     },
   };
 }
 
-export function createTelegramThreadDisplayNameRenameBinding(): {
+export function createTelegramThreadDisplayNameRenameBinding(
+  deps: { getLocale?: () => TelegramLocale } = {},
+): {
   bind: (rename: TelegramThreadDisplayNameRenamePort) => void;
   rename: TelegramThreadDisplayNameRenamePort;
 } {
@@ -484,7 +507,7 @@ export function createTelegramThreadDisplayNameRenameBinding(): {
       if (!current) {
         return {
           ok: false,
-          message: "Thread display naming is unavailable.",
+          message: t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.namingUnavailable"),
         };
       }
       return current(target, threadName);
@@ -547,7 +570,7 @@ export function registerTelegramBridgeCommands(
     const lifecycle = deps.daemonLifecycle;
     if (!lifecycle) {
       ctx.ui.notify(
-        "The packaged pi-telegram-daemon entrypoint is unavailable in this install.",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonUnavailable"),
         "error",
       );
       return;
@@ -560,7 +583,7 @@ export function registerTelegramBridgeCommands(
           await deps.setClusterLeaderMode("daemon");
         } catch {
           ctx.ui.notify(
-            "Could not persist daemon leadership mode; continuing.",
+            t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonLeadershipFailed"),
             "warning",
           );
         }
@@ -568,7 +591,7 @@ export function registerTelegramBridgeCommands(
       // The start can take several seconds (service install + transport
       // ownership), so acknowledge immediately instead of blocking silently.
       ctx.ui.notify(
-        "Starting the Telegram daemon and installing login autostart…",
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonStarting"),
         "info",
       );
       const result = await lifecycle.start(ctx.cwd);
@@ -578,7 +601,7 @@ export function registerTelegramBridgeCommands(
       // With transport owned by the daemon, connect this Pi instance as a
       // follower so Telegram works immediately instead of leaving the earlier
       // daemon-managed warning in place until the next session start.
-      ctx.ui.notify("Connecting this Pi instance to the daemon…", "info");
+      ctx.ui.notify(t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonConnecting"), "info");
       await runConnect("", ctx);
       return;
     }
@@ -587,7 +610,7 @@ export function registerTelegramBridgeCommands(
       ctx.ui.notify(result.message, result.ok ? "info" : "warning");
       if (result.ok) {
         ctx.ui.notify(
-          "Telegram is unavailable until the daemon is started again.",
+          t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonStoppedNotice"),
           "warning",
         );
       }
@@ -597,16 +620,16 @@ export function registerTelegramBridgeCommands(
     if (verb === "status") {
       const autostart = lifecycle.autostartStatus();
       const lines = [
-        formatTelegramDaemonStatus(lifecycle.status()),
+        formatTelegramDaemonStatus(lifecycle.status(), deps.getLocale?.()),
         autostart.installed && autostart.path
-          ? `Autostart: installed at ${autostart.path}`
-          : "Autostart: not installed",
-        `Daemon log: ${lifecycle.logPath?.() ?? "unavailable"}`,
+          ? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.autostartInstalled", { path: autostart.path })
+          : t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.autostartNotInstalled"),
+        t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonLog", { path: lifecycle.logPath?.() ?? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.unavailable") }),
       ];
       ctx.ui.notify(lines.join("\n"), "info");
       return;
     }
-    ctx.ui.notify("Usage: /telegram daemon start|stop|status", "warning");
+    ctx.ui.notify(t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.daemonUsage"), "warning");
   };
   const runConnect = async (
     args: string,
@@ -620,9 +643,9 @@ export function registerTelegramBridgeCommands(
       const requestedThreadName = parseTelegramRequestedThreadName(args);
       const requestedNameError =
         requestedNameTokens.length > 1
-          ? "Specify at most one as=Name Workspace Thread name."
+          ? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.connectAtMostOneName")
           : requestedNameTokens.length === 1 && !requestedThreadName
-            ? "Usage: /telegram connect [profile] as=Flightprice"
+            ? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.connectUsage")
             : requestedThreadName
               ? deps.validateThreadName?.(requestedThreadName)
               : undefined;
@@ -634,11 +657,11 @@ export function registerTelegramBridgeCommands(
       if (profileName && deps.activateProfileConfig) {
         const ok = await deps.activateProfileConfig(ctx, profileName);
         if (!ok) {
-          ctx.ui.notify(`Profile "${profileName}" not found.`, "error");
+          ctx.ui.notify(t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.profileNotFound", { profile: profileName }), "error");
           deps.updateStatus(ctx);
           return;
         }
-        ctx.ui.notify(`Activated profile "${profileName}".`, "info");
+        ctx.ui.notify(t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.profileActivated", { profile: profileName }), "info");
       } else {
         await (deps.activateDefaultProfileConfig?.(ctx) ?? deps.reloadConfig());
       }
@@ -648,7 +671,7 @@ export function registerTelegramBridgeCommands(
         const profileNames = deps.getProfileNames?.() ?? [];
         if (!profileName && profileNames.length > 0) {
           ctx.ui.notify(
-            `No default Telegram profile configured. Available profiles: ${profileNames.join(", ")}. Use /telegram connect <profileName> or /telegram setup to create a default profile.`,
+            t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.noDefaultProfile", { profiles: profileNames.join(", ") }),
             "info",
           );
           deps.updateStatus(ctx);
@@ -679,14 +702,14 @@ export function registerTelegramBridgeCommands(
             return {
               ...retry,
               message: retry.ok
-                ? `${recovery.message} ${retry.message ?? "Telegram bridge connected."}`
+                ? `${recovery.message} ${retry.message ?? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.bridgeConnected")}`
                 : retry.message,
             };
           } catch {
             return {
               ok: false,
               message:
-                "Telegram temporary state was recovered, but the bridge could not restart. Restart this Pi instance and run /telegram connect again.",
+                t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.recoveredRestartFailed"),
             };
           }
         }
@@ -751,7 +774,7 @@ export function registerTelegramBridgeCommands(
   };
   pi.registerCommand("telegram", {
     description:
-      "Telegram bridge: setup | status | connect | disconnect | daemon start|stop|status",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.usage"),
     handler: async (args, ctx) => {
       const [verb = "", ...rest] = args.trim().split(/\s+/u);
       const sub = rest.join(" ");
@@ -768,7 +791,7 @@ export function registerTelegramBridgeCommands(
           return runDaemon(sub, ctx);
         default:
           ctx.ui.notify(
-            "Usage: /telegram setup | status | connect | disconnect | daemon start|stop|status",
+            t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "telegram.usageShort"),
             "warning",
           );
       }
@@ -778,19 +801,19 @@ export function registerTelegramBridgeCommands(
     description:
       "Browse Pi projects (working directories) and their sessions",
     handler: async (_args, ctx) => {
-      await runTelegramProjectsCommand(ctx);
+      await runTelegramProjectsCommand(ctx, deps.getLocale?.());
     },
   });
   pi.registerCommand("sessions", {
     description: "Browse and switch sessions in the current project",
     handler: async (_args, ctx) => {
-      await runTelegramSessionsCommand(ctx);
+      await runTelegramSessionsCommand(ctx, deps.getLocale?.());
     },
   });
   pi.registerCommand("open", {
     description: "Switch to a session by path or session id: /open <path|id>",
     handler: async (args, ctx) => {
-      await runTelegramOpenCommand(args, ctx);
+      await runTelegramOpenCommand(args, ctx, deps.getLocale?.());
     },
   });
 }
@@ -972,6 +995,8 @@ export interface TelegramNewConfirmationCallbackDeps<TContext> {
 }
 
 export interface TelegramCompactConfirmationCallbackDeps<TContext> {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   ctx: TContext;
   answerCallbackQuery: (
     callbackQueryId: string,
@@ -1443,11 +1468,16 @@ function getTelegramCommandErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function formatTelegramCompactionFailure(error: unknown): string {
+function formatTelegramCompactionFailure(
+  error: unknown,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
+): string {
   let message = getTelegramCommandErrorMessage(error).trim();
   const redundantPrefixes = [
     "Compaction failed: ",
     "Turn prefix summarization failed: ",
+    t(locale, "commands.compactionFailedPrefix"),
+    t(locale, "commands.compactionSummaryFailedPrefix"),
   ];
   let stripped = true;
   while (stripped) {
@@ -1459,7 +1489,7 @@ function formatTelegramCompactionFailure(error: unknown): string {
     }
   }
   const sentence = /[.!?]$/u.test(message) ? message : `${message}.`;
-  return `Compaction failed! ${sentence}`;
+  return `${t(locale, "commands.compactionFailedHeading")} ${sentence}`;
 }
 
 export function parseTelegramCommand(
@@ -1942,7 +1972,7 @@ export async function handleTelegramCompactConfirmationCallback<TContext>(
   await deps.editInteractiveMessage(
     chatId,
     messageId,
-    TELEGRAM_COMPACTION_STARTED_TEXT,
+    getTelegramCompactionStartedText(deps.getLocale?.()),
     "html",
     { inline_keyboard: [] },
   );
@@ -2036,7 +2066,7 @@ export async function handleTelegramCompactCommand(
         deps.setCompactionInProgress(false);
         deps.updateStatus();
         dispatchNextQueuedTelegramTurnAfterCompact(deps);
-        void deps.sendTextReply(TELEGRAM_COMPACTION_COMPLETED_TEXT, {
+        void deps.sendTextReply(getTelegramCompactionCompletedText(deps.getLocale?.()), {
           parseMode: "HTML",
         });
       },
@@ -2049,7 +2079,7 @@ export async function handleTelegramCompactCommand(
         void deps.sendTextReply(
           formatTelegramInformationHeading(
             "⚠️",
-            formatTelegramCompactionFailure(error),
+            formatTelegramCompactionFailure(error, deps.getLocale?.()),
           ),
           { parseMode: "HTML" },
         );
@@ -2063,14 +2093,14 @@ export async function handleTelegramCompactCommand(
     await deps.sendTextReply(
       formatTelegramInformationHeading(
         "⚠️",
-        formatTelegramCompactionFailure(error),
+        formatTelegramCompactionFailure(error, deps.getLocale?.()),
       ),
       { parseMode: "HTML" },
     );
     return;
   }
   if (!deps.suppressStartNotice) {
-    await deps.sendTextReply(TELEGRAM_COMPACTION_STARTED_TEXT, {
+    await deps.sendTextReply(getTelegramCompactionStartedText(deps.getLocale?.()), {
       parseMode: "HTML",
     });
   }
@@ -2403,7 +2433,7 @@ async function handleTelegramCommandRuntime<
             await deps.openThreadNameDialog(nextMessage, _commandCtx);
           } else {
             await sendReplyFor(nextMessage)(
-              formatTelegramInformationHeading("🏷️", "Usage: /name Navigator"),
+              formatTelegramInformationHeading("🏷️", t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.nameUsage")),
               { parseMode: "HTML" },
             );
           }
@@ -2420,7 +2450,7 @@ async function handleTelegramCommandRuntime<
               )
               : formatTelegramInformationHeading(
                 result.ok ? "✅" : "⚠️",
-                result.message ?? "Thread display name reset failed.",
+                result.message ?? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.nameResetFailed"),
               ),
             { parseMode: "HTML" },
           );
@@ -2436,7 +2466,7 @@ async function handleTelegramCommandRuntime<
         }
         if (!deps.renameCurrentThread) {
           await sendReplyFor(nextMessage)(
-            formatTelegramInformationHeading("🚫", "Thread display naming is unavailable."),
+            formatTelegramInformationHeading("🚫", t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.namingUnavailable")),
             { parseMode: "HTML" },
           );
           return;
@@ -2454,7 +2484,7 @@ async function handleTelegramCommandRuntime<
             )
             : formatTelegramInformationHeading(
               result.ok ? "✅" : "⚠️",
-              result.message ?? "Thread display name update failed.",
+              result.message ?? t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thread.nameUpdateFailed"),
             ),
           { parseMode: "HTML" },
         );

@@ -342,7 +342,7 @@ export interface TelegramLifecycleBindingDeps {
   >;
   configStore: Pick<
     Config.TelegramConfigStore,
-    "get" | "getOutboundHandlers" | "hasBotToken" | "load"
+    "get" | "getOutboundHandlers" | "hasBotToken" | "load" | "getLocale"
   >;
   abort: Runtime.TelegramRuntimeAbortPort;
   typing: Runtime.TelegramRuntimeTypingPort;
@@ -812,7 +812,10 @@ export function registerTelegramLifecycleRuntimeHooks({
       if (shouldNotify) observedAutomaticCompaction = true;
       activityRuntime.onCompactionStart(Pi.getSessionCompactionReason(event));
       compactionObserver.onSessionBeforeCompact(event, ctx);
-      if (shouldNotify) sendCompactionNotice(Commands.TELEGRAM_COMPACTION_STARTED_MARKDOWN, ctx);
+      if (shouldNotify) sendCompactionNotice(
+        Commands.getTelegramCompactionStartedMarkdown(configStore.getLocale()),
+        ctx,
+      );
     },
     async onSessionCompact(event, ctx) {
       if (!isSessionContextActive(ctx)) return;
@@ -820,7 +823,10 @@ export function registerTelegramLifecycleRuntimeHooks({
       compactionObserver.onSessionCompact(event, ctx);
       if (observedAutomaticCompaction) {
         observedAutomaticCompaction = false;
-        sendCompactionNotice(Commands.TELEGRAM_COMPACTION_COMPLETED_MARKDOWN, ctx);
+        sendCompactionNotice(
+          Commands.getTelegramCompactionCompletedMarkdown(configStore.getLocale()),
+          ctx,
+        );
       }
     },
     async onSessionCompactFailed(event, ctx) {

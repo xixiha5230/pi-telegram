@@ -6,6 +6,11 @@
 
 import { formatTelegramCommandEmojiPrefix } from "./commands.ts";
 import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
+import {
   getTelegramSectionMainMenuRows,
   type TelegramSectionRegistry,
 } from "./sections.ts";
@@ -23,6 +28,8 @@ import {
 } from "./model.ts";
 
 export interface TelegramStatusMenuCallbackDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   updateModelMenuMessage: () => Promise<void>;
   updateThinkingMenuMessage: () => Promise<void>;
   updateSettingsMenuMessage?: () => Promise<void>;
@@ -138,14 +145,14 @@ export async function handleTelegramStatusMenuCallbackAction(
   if (deps.isVoiceReplyActive?.()) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "Thinking controls are disabled during voice replies.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thinking.disabledVoice"),
     );
     return true;
   }
   if (!activeModel?.reasoning) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "This model has no reasoning controls.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thinking.noReasoning"),
     );
     return true;
   }

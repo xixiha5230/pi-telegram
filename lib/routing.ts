@@ -2060,10 +2060,12 @@ export function createTelegramInboundRouteRuntime<
     const handledByCompact =
       await Commands.handleTelegramCompactConfirmationCallback(query, {
         ctx,
+        getLocale: deps.getLocale,
         answerCallbackQuery: deps.answerCallbackQuery,
         editInteractiveMessage: deps.editInteractiveMessage ?? (async () => {}),
         runCompact: async (compactCtx, chatId, replyToMessageId, target) => {
           await Commands.handleTelegramCompactCommand({
+            getLocale: deps.getLocale,
             isIdle: () => deps.isIdle(compactCtx),
             hasPendingMessages: () => deps.hasPendingMessages(compactCtx),
             hasActiveTelegramTurn: deps.activeTurnRuntime.has,

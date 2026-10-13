@@ -6,6 +6,11 @@
  */
 import { isDeepStrictEqual } from "node:util";
 import type { TelegramThreadDisplayMode } from "./config.ts";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
 import type {
   TelegramTopicTargetStore,
   TelegramWorkspaceDisplayBinding,
@@ -278,11 +283,12 @@ export async function applyTelegramThreadDisplaySetting(
     getLeaderSetter(): ((mode: TelegramThreadDisplayMode) => Promise<void>) | undefined;
     getFollowerSetter(): ((mode: TelegramThreadDisplayMode) => Promise<void>) | undefined;
     reloadConfig(): Promise<void>;
+    getLocale?: () => TelegramLocale;
   },
 ): Promise<void> {
   const profile = deps.getProfileKey();
   const setter = deps.ownsLeader() ? deps.getLeaderSetter() : deps.getFollowerSetter();
-  if (!setter) throw new Error("Thread display settings require a connected compatible instance.");
+  if (!setter) throw new Error(t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "threadDisplay.requiresCompatible"));
   await setter(mode);
   if (deps.getProfileKey() !== profile) throw new Error("Telegram Thread display setting changed profile.");
   await deps.reloadConfig();

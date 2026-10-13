@@ -19,6 +19,10 @@ import * as Config from "./config.ts";
 import * as Paths from "./paths.ts";
 import { createTelegramBridge } from "./bridge.ts";
 import { createDaemonBridgeHost } from "./daemon-host.ts";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+} from "./i18n.ts";
 import { createTelegramWorkerSupervisor } from "./supervisor.ts";
 import { createTelegramWorkerAttachmentRuntime } from "./worker-attachment.ts";
 import { createNodeWorkerSpawnPort } from "./worker-process.ts";
@@ -309,6 +313,7 @@ export function createTelegramDaemon(
     api: core.ports.telegramApiRuntime,
     resolveRoute: resolveWorkerUiRoute,
     getAllowedUserId: core.ports.configStore.getAllowedUserId,
+    getLocale: core.ports.configStore.getLocale,
     recordEvent: (error, details) =>
       core.ports.recordRuntimeEvent?.("daemon", error, details),
   });
@@ -329,7 +334,7 @@ export function createTelegramDaemon(
     onStart: (path) =>
       supervisor
         ? supervisor.startPath(path)
-        : { ok: false, message: "Managed workers are unavailable." },
+        : { ok: false, message: t((core.ports.configStore.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "daemon.managedUnavailableShort") },
     getLocale: core.ports.configStore.getLocale,
   });
   const escapeHtml = (value: string): string =>
@@ -451,12 +456,12 @@ export function createTelegramDaemon(
         text: "📍 <b>This Pi worker is here.</b>",
         parse_mode: "HTML",
       });
-      return { ok: true, alert: "Marker sent into that worker's thread." };
+      return { ok: true, alert: t((core.ports.configStore.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "daemon.markerSent") };
     } catch (error) {
       core.ports.recordRuntimeEvent?.("daemon", error, {
         phase: "locate-worker",
       });
-      return { ok: false, alert: "Could not reach that worker's thread." };
+      return { ok: false, alert: t((core.ports.configStore.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "daemon.markerFailed") };
     }
   };
   /** Resolve a live bus follower from a stable managed-worker id. */

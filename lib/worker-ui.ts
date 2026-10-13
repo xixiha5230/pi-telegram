@@ -7,6 +7,11 @@
  */
 
 import { randomBytes } from "node:crypto";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
 import { getTelegramUpdateHandlerRegistry } from "./updates.ts";
 import type { TelegramTarget } from "./target.ts";
 
@@ -58,6 +63,8 @@ export interface TelegramManagedWorkerUiBridge {
 }
 
 export interface TelegramManagedWorkerUiBridgeDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   api: {
     call: (method: string, params: Record<string, unknown>) => Promise<unknown>;
   };
@@ -108,6 +115,7 @@ function readMessageId(value: unknown): number | undefined {
 /** Validate an untrusted RPC event into the bounded dialog allowlist. */
 export function parseTelegramManagedWorkerUiRequest(
   value: unknown,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ):
   | {
       id: string;
@@ -132,7 +140,7 @@ export function parseTelegramManagedWorkerUiRequest(
   const title =
     typeof value.title === "string" && value.title.trim()
       ? value.title.slice(0, MAX_TEXT_LENGTH)
-      : "Pi needs input";
+      : t(locale, "workerUi.needsInput");
   switch (value.method) {
     case "select": {
       const options = Array.isArray(value.options)
@@ -288,7 +296,10 @@ export function createTelegramManagedWorkerUiBridge(
       }
       return;
     }
-    const dialogRequest = parseTelegramManagedWorkerUiRequest(request);
+    const dialogRequest = parseTelegramManagedWorkerUiRequest(
+      request,
+      deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE,
+    );
     if (!dialogRequest) {
       // A dialog method that failed bounded validation must still resolve, or the
       // worker's promise never settles. Fire-and-forget projections need no reply.
@@ -305,7 +316,7 @@ export function createTelegramManagedWorkerUiBridge(
     }
     if (dialogs.size >= MAX_DIALOGS) {
       respond({ cancelled: true });
-      deps.recordEvent?.("Managed worker UI dialog capacity exceeded.", {
+      deps.recordEvent?.(t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "workerUi.dialogCapacity"), {
         phase: "worker-ui-capacity",
         workerId,
       });
@@ -399,7 +410,7 @@ export function createTelegramManagedWorkerUiBridge(
       try {
         await deps.api.call("answerCallbackQuery", {
           callback_query_id: callbackId,
-          text: "This Pi dialog has expired.",
+          text: t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "workerUi.dialogExpired"),
           show_alert: true,
         });
       } catch {

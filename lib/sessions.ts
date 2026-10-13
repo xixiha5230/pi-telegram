@@ -246,10 +246,11 @@ function formatProjectChoice(
 export async function switchTelegramSession(
   ctx: ExtensionCommandContext,
   path: string,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): Promise<void> {
   if (!ctx.isIdle()) {
     ctx.ui.notify(
-      "Wait for the current run to finish before switching sessions.",
+      t(locale, "sessions.tui.waitForRun"),
       "warning",
     );
     return;
@@ -258,16 +259,16 @@ export async function switchTelegramSession(
   try {
     result = await ctx.switchSession(path, {
       withSession: async (nextCtx) => {
-        nextCtx.ui.notify(`Switched to session ${path}`, "info");
+        nextCtx.ui.notify(t(locale, "sessions.tui.switchedTo", { path }), "info");
       },
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    ctx.ui.notify(`Session switch failed: ${detail}`, "error");
+    ctx.ui.notify(t(locale, "sessions.tui.switchFailed", { detail }), "error");
     return;
   }
   if (result.cancelled) {
-    ctx.ui.notify("Session switch was cancelled.", "warning");
+    ctx.ui.notify(t(locale, "sessions.tui.switchCancelled"), "warning");
   }
 }
 
@@ -275,14 +276,15 @@ async function pickSession(
   ctx: ExtensionCommandContext,
   sessions: readonly TelegramProjectSessionSummary[],
   title: string,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): Promise<void> {
   if (sessions.length === 0) {
-    ctx.ui.notify(`${title}: no sessions found.`, "info");
+    ctx.ui.notify(t(locale, "sessions.tui.noSessionsIn", { title }), "info");
     return;
   }
   const byLabel = new Map<string, TelegramProjectSessionSummary>();
   const labels = sessions.map((session, index) => {
-    const label = formatSessionChoice(session, index);
+    const label = formatSessionChoice(session, index, locale);
     byLabel.set(label, session);
     return label;
   });
@@ -290,51 +292,64 @@ async function pickSession(
   if (!choice) return;
   const session = byLabel.get(choice);
   if (!session) return;
-  await switchTelegramSession(ctx, session.path);
+  await switchTelegramSession(ctx, session.path, locale);
 }
 
 export async function runTelegramProjectsCommand(
   ctx: ExtensionCommandContext,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): Promise<void> {
   const projects = await listTelegramProjects();
   if (projects.length === 0) {
-    ctx.ui.notify("No Pi sessions found.", "info");
+    ctx.ui.notify(t(locale, "sessions.tui.noSessions"), "info");
     return;
   }
   const byLabel = new Map<string, TelegramProjectSummary>();
   const labels = projects.map((project, index) => {
-    const label = formatProjectChoice(project, index);
+    const label = formatProjectChoice(project, index, locale);
     byLabel.set(label, project);
     return label;
   });
   const choice = await ctx.ui.select(
-    "Pi projects (working directories)",
+    t(locale, "sessions.tui.projectsTitle"),
     labels,
   );
   if (!choice) return;
   const project = byLabel.get(choice);
   if (!project) return;
-  await pickSession(ctx, project.sessions, `Sessions in ${project.cwd}`);
+  await pickSession(
+    ctx,
+    project.sessions,
+    t(locale, "sessions.tui.sessionsIn", { cwd: project.cwd }),
+    locale,
+  );
 }
 
 export async function runTelegramSessionsCommand(
   ctx: ExtensionCommandContext,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): Promise<void> {
   const sessions = await listTelegramProjectSessions(ctx.cwd);
-  await pickSession(ctx, sessions, `Sessions in ${ctx.cwd}`);
+  await pickSession(
+    ctx,
+    sessions,
+    t(locale, "sessions.tui.sessionsIn", { cwd: ctx.cwd }),
+    locale,
+  );
 }
 
 export async function runTelegramOpenCommand(
   args: string,
   ctx: ExtensionCommandContext,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): Promise<void> {
   const target = args.trim();
   if (target.length === 0) {
-    ctx.ui.notify("Usage: /open <session-path|session-id>", "warning");
+    ctx.ui.notify(t(locale, "sessions.tui.openUsage"), "warning");
     return;
   }
   if (target.endsWith(".jsonl")) {
-    await switchTelegramSession(ctx, target);
+    await switchTelegramSession(ctx, target, locale);
     return;
   }
   const [all, current] = await Promise.all([
@@ -343,7 +358,7 @@ export async function runTelegramOpenCommand(
   ]);
   const match = [...current, ...all].find((info) => info.id === target);
   if (!match) {
-    ctx.ui.notify(`No session found for id ${target}.`, "error");
+    ctx.ui.notify(t(locale, "sessions.tui.noSessionForId", { id: target }), "error");
     return;
   }
   await switchTelegramSession(ctx, match.path);

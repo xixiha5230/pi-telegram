@@ -310,13 +310,14 @@ export function createAndBindTelegramSectionRegistry(): TelegramSectionRegistry 
  */
 export function registerTelegramSection(
   section: TelegramSectionRegistration,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): () => void {
   const registry = (globalThis as Record<string, unknown>)[
     SECTION_REGISTRY_KEY
   ] as TelegramSectionRegistry | undefined;
   if (!registry) {
     throw new Error(
-      "Telegram section registry not available. Is pi-telegram loaded and initialized?",
+      t(locale, "sections.registryUnavailable"),
     );
   }
 
@@ -576,7 +577,7 @@ export async function handleTelegramSectionOpen(
   if (!section) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "This section is no longer available.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sections.noLongerAvailable"),
     );
     return true;
   }
@@ -633,7 +634,7 @@ export async function handleTelegramSectionCallback(
   if (!section) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "This section is no longer available.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sections.noLongerAvailable"),
     );
     return true;
   }
@@ -702,7 +703,7 @@ export async function handleTelegramSectionSettingsOpen(
   if (!section || !section.registration.settings) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "This section is no longer available.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "sections.noLongerAvailable"),
     );
     return true;
   }

@@ -13,6 +13,11 @@ import { existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  TELEGRAM_DEFAULT_LOCALE,
+  t,
+  type TelegramLocale,
+} from "./i18n.ts";
 
 import * as Paths from "./paths.ts";
 import {
@@ -40,6 +45,8 @@ export interface TelegramDaemonOwnerView {
 }
 
 export interface TelegramDaemonLifecycleDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   /** Absolute path to the packaged daemon entrypoint, or undefined when absent. */
   resolveDaemonBinPath: () => string | undefined;
   getNodePath: () => string;
@@ -168,7 +175,7 @@ export function createTelegramDaemonLifecycle(
       }
       const binPath = deps.resolveDaemonBinPath();
       if (!binPath) {
-        return { ok: false, message: "The packaged daemon entrypoint could not be found." };
+        return { ok: false, message: t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "daemonLifecycle.notFound") };
       }
       const logPath = deps.getLogPath();
       // Persistent autostart is the default: the installed service starts the daemon
@@ -208,7 +215,7 @@ export function createTelegramDaemonLifecycle(
         logPath,
       });
       if (pid === undefined) {
-        return { ok: false, message: "The daemon process could not be started." };
+        return { ok: false, message: t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "daemonLifecycle.startFailed") };
       }
       if (!(await waitForOwner())) {
         deps.recordEvent?.("Telegram daemon did not become ready", { phase: "daemon-start", pid });
@@ -242,8 +249,8 @@ export function createTelegramDaemonLifecycle(
       }
       const stopped = await waitFor(() => liveOwner() === undefined, STOP_READY_TIMEOUT_MS);
       return stopped
-        ? { ok: true, message: `Telegram daemon stopped.${autostartNote}` }
-        : { ok: false, message: `The daemon (pid ${owner.pid}) is still running.` };
+        ? { ok: true, message: `${t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "daemonLifecycle.stopped")}${autostartNote}` }
+        : { ok: false, message: t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "daemonLifecycle.stillRunning", { pid: owner.pid }) };
     },
   };
 }
@@ -251,12 +258,13 @@ export function createTelegramDaemonLifecycle(
 /** Human-readable one-line daemon status for the command surface. */
 export function formatTelegramDaemonStatus(
   status: TelegramDaemonLifecycleStatus,
+  locale: TelegramLocale = TELEGRAM_DEFAULT_LOCALE,
 ): string {
-  if (!status.running) return "Telegram daemon: not running.";
-  const parts = [`Telegram daemon: running (pid ${status.pid})`];
-  if (status.cwd) parts.push(`cwd ${status.cwd}`);
-  if (status.workers !== undefined) parts.push(`workers ${status.workers}`);
-  if (status.routes !== undefined) parts.push(`routes ${status.routes}`);
+  if (!status.running) return t(locale, "daemonLifecycle.notRunning");
+  const parts = [t(locale, "daemonLifecycle.running", { pid: status.pid ?? "?" })];
+  if (status.cwd) parts.push(t(locale, "daemonLifecycle.cwd", { cwd: status.cwd }));
+  if (status.workers !== undefined) parts.push(t(locale, "daemonLifecycle.workers", { count: status.workers }));
+  if (status.routes !== undefined) parts.push(t(locale, "daemonLifecycle.routes", { count: status.routes }));
   return `${parts.join(" \u00b7 ")}.`;
 }
 
@@ -267,6 +275,7 @@ export function formatTelegramDaemonStatus(
 export function createTelegramDaemonLifecyclePorts(input: {
   getProfileName: () => string | undefined;
   getAgentDir: () => string;
+  getLocale?: () => TelegramLocale;
   recordRuntimeEvent?: (
     category: string,
     error: unknown,
@@ -280,6 +289,7 @@ export function createTelegramDaemonLifecyclePorts(input: {
     Paths.resolveTelegramProfileTempFilePath("daemon", "log", input.getAgentDir(), profileName());
   return {
     resolveDaemonBinPath: () => resolveTelegramDaemonBinPath(import.meta.url),
+    getLocale: input.getLocale,
     getNodePath: () => process.execPath,
     getLogPath: logPath,
     getEnv: () => telegramDaemonSpawnEnvironment(process.env),

@@ -16,7 +16,7 @@ import {
   type TelegramModelMenuStateBuilderDeps,
   type TelegramReplyMarkup,
 } from "./menu-model.ts";
-import type { TelegramLocale } from "./i18n.ts";
+import { TELEGRAM_DEFAULT_LOCALE, t, type TelegramLocale } from "./i18n.ts";
 import {
   handleTelegramStatusMenuCallbackAction,
   openTelegramStatusMenu,
@@ -121,6 +121,8 @@ export type {
 } from "./menu-thinking.ts";
 
 export interface TelegramMenuCallbackEntryDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   handleStatusAction: () => Promise<boolean>;
   handleThinkingAction: () => Promise<boolean>;
   handleModelAction: () => Promise<boolean>;
@@ -143,6 +145,8 @@ export interface MenuCallbackQuery {
 export interface StoredTelegramMenuCallbackDeps<
   TModel extends MenuModel = MenuModel,
 > {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   getStoredModelMenuState: (
     messageId: number | undefined,
     chatId?: number,
@@ -382,7 +386,7 @@ export async function handleTelegramMenuCallbackEntry(
   if (!state) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "Interactive message expired.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "common.expired"),
     );
     return;
   }
@@ -406,6 +410,7 @@ export async function handleStoredTelegramMenuCallback<
     query.message?.chat?.id,
   );
   await handleTelegramMenuCallbackEntry(query.id, query.data, state, {
+    getLocale: deps.getLocale,
     handleStatusAction: async () => {
       if (!state) return false;
       return deps.handleStatusAction(state);
@@ -564,7 +569,7 @@ export async function handleTelegramMenuCallbackRuntime<
       query.message?.chat?.id,
     );
     if (!state) {
-      await deps.answerCallbackQuery(query.id, "Interactive message expired.");
+      await deps.answerCallbackQuery(query.id, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "common.expired"));
       return;
     }
     await deps.updateStatusMessage(state, ctx);
@@ -591,7 +596,7 @@ export async function handleTelegramMenuCallbackRuntime<
           if (!state) {
             await deps.answerCallbackQuery(
               query.id,
-              "Interactive message expired.",
+              t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "common.expired"),
             );
             return;
           }
@@ -680,6 +685,7 @@ export async function handleTelegramMenuCallbackRuntime<
     }
   }
   await handleStoredTelegramMenuCallback(query, {
+    getLocale: deps.getLocale,
     getStoredModelMenuState: deps.getStoredModelMenuState,
     handleStatusAction: async (state) =>
       handleTelegramStatusMenuCallbackAction(
@@ -694,6 +700,7 @@ export async function handleTelegramMenuCallbackRuntime<
             deps.updateSettingsMenuMessage?.(state, ctx) ?? Promise.resolve(),
           answerCallbackQuery: deps.answerCallbackQuery,
           isVoiceReplyActive: deps.isVoiceReplyActive,
+          getLocale: deps.getLocale,
         },
       ),
     handleThinkingAction: async (state) =>
@@ -710,6 +717,7 @@ export async function handleTelegramMenuCallbackRuntime<
           updateStatusMessage: () => deps.updateStatusMessage(state, ctx),
           answerCallbackQuery: deps.answerCallbackQuery,
           isVoiceReplyActive: deps.isVoiceReplyActive,
+          getLocale: deps.getLocale,
         },
       ),
     handleModelAction: async (state) => {
@@ -730,6 +738,7 @@ export async function handleTelegramMenuCallbackRuntime<
             updateModelMenuMessage: () =>
               deps.updateModelMenuMessage(state, ctx),
             updateStatusMessage: () => deps.updateStatusMessage(state, ctx),
+            getLocale: deps.getLocale,
             answerCallbackQuery: deps.answerCallbackQuery,
             persistScopedModelPatterns: deps.persistScopedModelPatterns
               ? (patterns) => deps.persistScopedModelPatterns!(patterns, ctx)

@@ -1294,7 +1294,7 @@ test("Lifecycle binding disconnects only graceful quit and preserves cleanup aft
         events.push("model-select");
       },
     },
-    configStore: { get: () => ({}), getOutboundHandlers: () => [] },
+    configStore: { get: () => ({}), getOutboundHandlers: () => [], getLocale: () => "en" },
     abort: { setHandler: () => {}, clearHandler: () => {} },
     typing: { stop: () => {}, waitForIdle: async () => {} },
     progress: {
@@ -1466,6 +1466,7 @@ test("Lifecycle binding routes native typing, previews, and normalized activity"
       get: () => ({}),
       getOutboundHandlers: () => [],
       hasBotToken: () => true,
+      getLocale: () => "en",
     },
     abort: runtime.abort,
     typing: runtime.typing,

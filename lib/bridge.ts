@@ -53,6 +53,7 @@ import * as TextGroups from "./text-groups.ts";
 import * as ThreadReconciler from "./thread-reconciler.ts";
 import * as ThreadDisplay from "./thread-display.ts";
 import * as Threads from "./threads.ts";
+import { t } from "./i18n.ts";
 import * as Ui from "./ui.ts";
 import * as TimeInjection from "./time-injection.ts";
 import * as Updates from "./updates.ts";
@@ -902,6 +903,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     runtime: modelMenuRuntime,
     createSettingsManager: host.helpers.createSettingsManager,
     getActiveModel: currentModelRuntime.get,
+    getLocale: configStore.getLocale,
   });
   const queueMenuRuntime = MenuQueue.createTelegramQueueMenuRuntime({
     telegramQueueStore,
@@ -1012,9 +1014,13 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
       getCurrentIdentity: getCurrentInstanceThreadIdentity,
     });
   const telegramThreadDisplayNameRenameBinding =
-    Commands.createTelegramThreadDisplayNameRenameBinding();
+    Commands.createTelegramThreadDisplayNameRenameBinding({
+      getLocale: configStore.getLocale,
+    });
   const telegramThreadDisplayNameResetBinding =
-    Commands.createTelegramThreadDisplayNameResetBinding();
+    Commands.createTelegramThreadDisplayNameResetBinding({
+      getLocale: configStore.getLocale,
+    });
   const inboundRouteRuntime = Routing.createTelegramInboundRouteRuntime({
     configStore,
     getLocale: configStore.getLocale,
@@ -1790,7 +1796,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
           ? await telegramBusFollowerRegistration.resetThreadName?.(target)
           : (await telegramBusLeaderRuntime.resetLeaderThreadName(target)).threadName;
         if (!result) {
-          return { ok: false, message: "Thread display name reset is unavailable." };
+          return { ok: false, message: t(configStore.getLocale(), "thread.nameResetUnavailable") };
         }
         const leaderTarget = telegramBusLeaderState.getTarget();
         if (!wasFollower && leaderTarget) {
@@ -1804,7 +1810,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
         return {
           ok: false,
           message: error instanceof Error
-            ? error.message : "Thread display name reset failed.",
+            ? error.message : t(configStore.getLocale(), "thread.nameResetFailed"),
         };
       }
     },
@@ -1816,6 +1822,7 @@ export function createTelegramBridge(host: TelegramBridgeHost) {
     DaemonLifecycle.createTelegramDaemonLifecyclePorts({
       getProfileName: configStore.getActiveProfileName,
       getAgentDir: Paths.resolveAgentDir,
+      getLocale: configStore.getLocale,
       recordRuntimeEvent,
     }),
   );

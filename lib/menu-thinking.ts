@@ -27,6 +27,8 @@ import {
 } from "./model.ts";
 
 export interface TelegramThinkingMenuCallbackDeps {
+  /** Resolved UI locale for this profile. Defaults to English when absent. */
+  getLocale?: () => TelegramLocale;
   setThinkingLevel: (level: ThinkingLevel) => void;
   getCurrentThinkingLevel: () => ThinkingLevel;
   updateStatusMessage: () => Promise<void>;
@@ -103,20 +105,20 @@ export async function handleTelegramThinkingMenuCallbackAction(
   const action = parseTelegramThinkingMenuCallbackAction(data);
   if (!action) return false;
   if (!isThinkingLevel(action.level)) {
-    await deps.answerCallbackQuery(callbackQueryId, "Invalid thinking level.");
+    await deps.answerCallbackQuery(callbackQueryId, t(deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE, "thinking.invalidLevel"));
     return true;
   }
   if (deps.isVoiceReplyActive?.()) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "Thinking controls are disabled during voice replies.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thinking.disabledVoice"),
     );
     return true;
   }
   if (!activeModel?.reasoning) {
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "This model has no reasoning controls.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "thinking.noReasoning"),
     );
     return true;
   }

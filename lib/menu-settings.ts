@@ -754,7 +754,7 @@ export async function handleTelegramSettingsMenuCallbackAction(
   }
   if (data === "settings:open:thread-display" || data.startsWith("settings:set:thread-display:")) {
     if (!deps.getThreadDisplayMode?.() || !deps.setThreadDisplayMode) {
-      await deps.answerCallbackQuery(callbackQueryId, "Thread display requires Threaded Mode and a connected instance.");
+      await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.threadDisplayRequiresThreaded"));
       return true;
     }
     if (data.startsWith("settings:set:thread-display:")) {
@@ -768,7 +768,7 @@ export async function handleTelegramSettingsMenuCallbackAction(
       try {
         await deps.setThreadDisplayMode(mode);
       } catch {
-        await deps.answerCallbackQuery(callbackQueryId, "Thread display was not fully applied. The preference may be saved; retry after checking the leader.");
+        await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.threadDisplayNotApplied"));
         return true;
       }
     }
@@ -810,7 +810,7 @@ export async function handleTelegramSettingsMenuCallbackAction(
     await updateTelegramSettingsMenuMessage(deps, deps.sectionRegistry);
     await deps.answerCallbackQuery(
       callbackQueryId,
-      "Public assistant output is always delivered while Telegram is connected.",
+      t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.publicOutputAlways"),
     );
     return true;
   }
@@ -928,13 +928,13 @@ export async function handleTelegramSettingsMenuCallbackAction(
   }
   if (data === "settings:review:inactive-threads") {
     if (!deps.reviewInactiveThreads) {
-      await deps.answerCallbackQuery(callbackQueryId, "Inactive tab review is unavailable.");
+      await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.reviewUnavailable"));
       return true;
     }
     try {
       const review = await deps.reviewInactiveThreads();
       if (review.count === 0) {
-        await deps.answerCallbackQuery(callbackQueryId, "No proven inactive tabs.");
+        await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.noInactiveTabs"));
       } else {
         await deps.updateSettingsMessage(
           buildInactiveThreadReviewText(review.count, deps.getLocale?.()),
@@ -944,17 +944,17 @@ export async function handleTelegramSettingsMenuCallbackAction(
             deps.getLocale?.(),
           ),
         );
-        await deps.answerCallbackQuery(callbackQueryId, "Review prepared. No tabs were deleted.");
+        await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.reviewPrepared"));
       }
     } catch {
-      await deps.answerCallbackQuery(callbackQueryId, "Could not safely review inactive tabs.");
+      await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.reviewFailed"));
     }
     return true;
   }
   if (data.startsWith("settings:clean:")) {
     const operationId = data.slice("settings:clean:".length);
     if (!/^thread-cleanup:[a-f0-9]{32}$/u.test(operationId) || !deps.cleanInactiveThreads) {
-      await deps.answerCallbackQuery(callbackQueryId, "Cleanup confirmation is unavailable or stale.");
+      await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.cleanupStale"));
       return true;
     }
     try {
@@ -966,7 +966,7 @@ export async function handleTelegramSettingsMenuCallbackAction(
         result.recovery === "deletion-outcome-unknown" ? " Recovery: deletion outcome unknown; no retry." :
         result.recovery === "authority-blocked" ? " Recovery: cleanup authority unavailable." : ""));
     } catch {
-      await deps.answerCallbackQuery(callbackQueryId, "Cleanup could not be safely completed.");
+      await deps.answerCallbackQuery(callbackQueryId, t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "settings.cleanupFailed"));
     }
     return true;
   }
@@ -1056,7 +1056,7 @@ export function createTelegramSettingsMenuRuntime<
         if (typeof messageId !== "number" || typeof chatId !== "number") {
           await deps.answerCallbackQuery(
             query.id,
-            "Interactive message expired.",
+            t((deps.getLocale?.() ?? TELEGRAM_DEFAULT_LOCALE), "common.expired"),
           );
           return true;
         }
