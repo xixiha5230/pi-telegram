@@ -1,0 +1,40 @@
+lib/settings-manager.ts
+  s_064644aacf1a0c::t_99de2e37a6e16a 1-32
+lib/i18n.ts
+  s_064644aacf1a0c::t_b29230628e26a2 288-294,595-601
+lib/bridge.ts
+  s_064644aacf1a0c::t_3276304cb5b6dd 37,48,1164
+package.json
+  s_064644aacf1a0c::t_161605c6d526bb 3
+lib/pi.ts
+  s_064644aacf1a0c::t_f67d4c664c0777 29-32
+CHANGELOG.md
+  s_064644aacf1a0c::t_bdd9f4a7caa23c 7-10
+lib/setup.ts
+  s_064644aacf1a0c::t_035943793d09c5 55-56,59-63,94-95,190,201-202,210,218,220-221,227-231,236-237,245-249,293
+  s_064644aacf1a0c::t_41a1296b9abcdd 92-93,292
+  s_064644aacf1a0c::t_d20c69bc61346d 53-54,189,200,203-204,208-209,211-212,224-226,232-234
+package-lock.json
+  s_064644aacf1a0c::t_760af53125356f 3,9
+lib/sessions.ts
+  s_064644aacf1a0c::t_1e552535b0a276 7-9,13-24,192,199,206,366,368-369
+lib/bindings.ts
+  s_064644aacf1a0c::t_6a3f12b0f32294 272-273,283-286
+  s_064644aacf1a0c::t_5ca3b514b8d8ad 13,274-275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "baa444bf63bcf19019134f755021ff760fe60705",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
