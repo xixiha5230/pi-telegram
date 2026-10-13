@@ -1,0 +1,102 @@
+lib/menu.ts
+  s_064644aacf1a0c::t_e2e62069448c0c 19,389,572,599
+  s_064644aacf1a0c::t_f22292d6a69478 413
+  s_064644aacf1a0c::t_d31fce51be2643 741
+  s_064644aacf1a0c::t_02ac2fe0b734a3 124-125
+  s_064644aacf1a0c::t_26622ee5ee3b45 148-149,688
+  s_064644aacf1a0c::t_dea8dd1d01eda4 703,720
+lib/i18n.ts
+  s_064644aacf1a0c::t_9065c4a50b33c9 288-290,292-316,588-590,592-616
+  s_064644aacf1a0c::t_e76bb788f6c982 331-336,631-636
+  s_064644aacf1a0c::t_9c17b400696e6f 170,470
+  s_064644aacf1a0c::t_de5cc7c3302788 291,591
+  s_064644aacf1a0c::t_787c552209d4cf 322,622
+  s_064644aacf1a0c::t_c073dfae3e51dd 70,104-112,154-162,168-169,181-182,317-321,323-330
+  s_064644aacf1a0c::t_302467d10935bf 163-164,463-464
+  s_064644aacf1a0c::t_340b36ad597cbf 346-353,646-653
+  s_064644aacf1a0c::t_c0cddde19e58fa 354-355,654-655
+  s_064644aacf1a0c::t_51ef865fac0835 371,404-412,454-462,468-469,481-482,617-621,623-630
+lib/sections.ts
+  s_064644aacf1a0c::t_86b3100bf7c461 313,320
+  s_064644aacf1a0c::t_c9a42cd58f39a5 580,637,706
+lib/bindings.ts
+  s_064644aacf1a0c::t_a4da26d2ecb525 815-818,826-829
+  s_064644aacf1a0c::t_d70f6467ea8fa2 345
+lib/menu-thinking.ts
+  s_064644aacf1a0c::t_e71c03a3168d3f 108
+  s_064644aacf1a0c::t_f4b2b80784db86 30-31
+  s_064644aacf1a0c::t_a79754a19b98a0 114,121
+lib/menu-model.ts
+  s_064644aacf1a0c::t_a314efce011b8c 202,587,992,1010
+  s_064644aacf1a0c::t_859471d123cab2 632
+  s_064644aacf1a0c::t_19773a4fadaca9 132-133
+  s_064644aacf1a0c::t_234ecd277a8b89 104
+  s_064644aacf1a0c::t_7ccadbe158d200 526
+  s_064644aacf1a0c::t_223c1c94b9ee62 165-166,252,792,802,826,840,852,857,872-873,884,887,907,955-958,973
+lib/thread-display.ts
+  s_064644aacf1a0c::t_bc0fcdb7e1067f 286,291
+  s_064644aacf1a0c::t_15940a73cdebe3 9-13
+lib/bridge.ts
+  s_064644aacf1a0c::t_ac559220c38a04 56,1799,1813
+  s_064644aacf1a0c::t_a5cbd2de139eac 906
+  s_064644aacf1a0c::t_03e14eaf6dec59 1825
+  s_064644aacf1a0c::t_67205985065155 1017-1019,1021-1023
+lib/sessions.ts
+  s_064644aacf1a0c::t_b23dac4e05ff81 249,253,262,267,271,279,282,287,295,300,304,309,314,320-325,330,333-338
+  s_064644aacf1a0c::t_ce22c8743e752a 344,348,352,361
+tests/bindings.test.ts
+  s_064644aacf1a0c::t_bf02d5a6c3169e 1297,1469
+lib/routing.ts
+  s_064644aacf1a0c::t_00082fd9b2f2a4 2063,2068
+lib/daemon-lifecycle.ts
+  s_064644aacf1a0c::t_1e8bfb7185a86d 16-20,48-49,178,218
+  s_064644aacf1a0c::t_b084530e71b6c9 252-253,261,263,265-267
+  s_064644aacf1a0c::t_f90963c750da79 264
+  s_064644aacf1a0c::t_d108216adddcab 278,292
+lib/worker-ui.ts
+  s_064644aacf1a0c::t_80024ecf268bb3 66-67,299-302
+  s_064644aacf1a0c::t_1bf1b45010fec8 413
+  s_064644aacf1a0c::t_c9a42cd58f39a5 319
+  s_064644aacf1a0c::t_11509a705e8948 10-14,118,143
+lib/menu-queue.ts
+  s_064644aacf1a0c::t_a79754a19b98a0 399,531,747
+lib/menu-status.ts
+  s_064644aacf1a0c::t_2a2f6967b4776c 9-12
+  s_064644aacf1a0c::t_3cb7bb7a00da57 31-32
+  s_064644aacf1a0c::t_a79754a19b98a0 148,155
+lib/menu-settings.ts
+  s_064644aacf1a0c::t_a79754a19b98a0 757,771,813,931,937,947,950,957,969,1059
+CHANGELOG.md
+  s_064644aacf1a0c::t_de84b1ace12134 7
+lib/commands.ts
+  s_064644aacf1a0c::t_cb5de78651cf9f 428-429
+  s_064644aacf1a0c::t_6ff868be2558f9 269-292,1471-1474,1479-1480,1492
+  s_064644aacf1a0c::t_d80b02c9f9e01b 623
+  s_064644aacf1a0c::t_afa64bdb1ca279 573,586,594,604,613,625-627,632,646,648,660,664,674,705,712,777,794
+  s_064644aacf1a0c::t_2b00b13d8f61f8 998-999
+  s_064644aacf1a0c::t_6dd62272901d2b 1975,2069,2082,2096,2103
+  s_064644aacf1a0c::t_9e960b5dcd6ec2 816
+  s_064644aacf1a0c::t_1f140e19b63c48 490,510,2436,2453,2469,2487
+  s_064644aacf1a0c::t_6d843839c690a6 804,810
+  s_064644aacf1a0c::t_b7db66a115abf7 478-480,495-497
+lib/daemon.ts
+  s_064644aacf1a0c::t_a248d730cf7847 316
+  s_064644aacf1a0c::t_bade49e34534ab 22-25
+  s_064644aacf1a0c::t_c9a42cd58f39a5 337,459,464
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "4c5459ae769ba9e8c847efe3b19fb881b97f1531",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
