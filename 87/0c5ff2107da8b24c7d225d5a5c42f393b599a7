@@ -1,0 +1,44 @@
+README.md
+  s_064644aacf1a0c::t_042934917d8b06 202-205
+docs/activity.md
+  s_064644aacf1a0c::t_ebda21535a31e4 17
+docs/sections.md
+  s_064644aacf1a0c::t_ebda21535a31e4 45,135,137,400,461
+  s_064644aacf1a0c::t_3cb0fe04348bea 188
+docs/outbound.md
+  s_064644aacf1a0c::t_ebda21535a31e4 132,138,141
+docs/public-api.md
+  s_064644aacf1a0c::t_ebda21535a31e4 22-30,34,37,236,264,300,321,342,363,382,403,417,442,448,476,498,520,545,582-583
+docs/delivery.md
+  s_064644aacf1a0c::t_ebda21535a31e4 20
+skills/telegram-bridge/references/configuration.md
+  s_064644aacf1a0c::t_ebda21535a31e4 15
+docs/callback-namespaces.md
+  s_064644aacf1a0c::t_3cb0fe04348bea 43
+package.json
+  s_064644aacf1a0c::t_3cb0fe04348bea 116
+docs/updates.md
+  s_064644aacf1a0c::t_ebda21535a31e4 34,49,52,69
+docs/voice.md
+  s_064644aacf1a0c::t_ebda21535a31e4 55,102,146,160
+docs/control-plane.md
+  s_064644aacf1a0c::t_ebda21535a31e4 501
+docs/inbound.md
+  s_064644aacf1a0c::t_ebda21535a31e4 94,96,107-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.49-trip",
+  "base_commit_sha": "870c5ff2107da8b24c7d225d5a5c42f393b599a7",
+  "prompts": {},
+  "sessions": {
+    "s_064644aacf1a0c": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "01a12fe0-0eed-77c0-9ca2-1fc99ab16408",
+        "model": "deepseek-v4.1-flash"
+      },
+      "human_author": "qizhenchen <qizhenchen@trip.com>"
+    }
+  }
+}
