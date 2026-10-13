@@ -14,7 +14,7 @@ The public membrane is:
 ```ts
 import {
   registerTelegramActivityHandler,
-} from "@llblab/pi-telegram/activity";
+} from "@xixiha5230/pi-telegram/activity";
 ```
 
 An issue #126 consumer can own optional Settings policy for reasoning, intermediate assistant prose, and tool rows. Those visibility choices do not become mandatory bridge-core settings.

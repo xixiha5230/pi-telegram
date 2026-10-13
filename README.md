@@ -199,6 +199,10 @@ Named profile identifiers contain only lowercase ASCII letters and digits (maxim
 
 `/start` opens the Telegram-native control panel: status, prompt-template commands, model selection, thinking level, settings, queue controls, and extension sections. It is the primary Telegram UI; reaction shortcuts are secondary queue affordances.
 
+### UI Language
+
+Every Telegram-rendered surface is localized through one catalog (`lib/i18n.ts`). The locale resolves in this order: an explicit `locale` in `telegram.json`, else the paired owner's Telegram `language_code`, else English. Ships `en` and `zh-CN`; switch live from **Settings → 🌐 Language**, and the bot command menu (`setMyCommands`) registers per `language_code`.
+
 ### Queue Runtime
 
 Messages sent while Pi is busy become queued turns. Queue controls let you inspect, prioritize, keep or skip, and dispatch work without touching the terminal.

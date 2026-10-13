@@ -113,7 +113,7 @@
     "sourceSkills": [
       "./skills"
     ],
-    "image": "https://raw.githubusercontent.com/llblab/pi-telegram/main/screenshot.png"
+    "image": "https://raw.githubusercontent.com/xixiha5230/pi-telegram/main/screenshot.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": ">=0.84.4",

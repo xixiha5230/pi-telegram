@@ -31,7 +31,7 @@ If the extension needs a durable top-level Telegram menu section with managed re
 - Handlers run before built-in routing in the independent semantic worker. They must return promptly because a long await delays later handler/routing execution for that source order, but it does not delay `getUpdates` admission or offset persistence. Replacement generations wait for the unsettled handler rather than executing the same update concurrently.
 - Handler errors are caught and logged silently so polling never breaks. If you need durable error reporting, do it inside your handler.
 - Typed handlers receive an optional second `execution` argument with `signal`, `updateId`, `generation`, `isCurrent()`, and `assertCurrent()`. Pass `signal` into cancellable work and call `assertCurrent()` immediately before irreversible effects. The runtime also rejects a verdict returned after cancellation. Legacy one-argument and zero-coupling handlers remain compatible, but any effect they commit while still awaiting is their responsibility; replacement replay still waits for that handler's actual settlement.
-- The registry lives on `globalThis`. Module instance identity is not required, so layered extensions can reach it without importing `@llblab/pi-telegram`.
+- The registry lives on `globalThis`. Module instance identity is not required, so layered extensions can reach it without importing `@xixiha5230/pi-telegram`.
 
 ## Verdicts
 
@@ -46,10 +46,10 @@ The first handler that returns `"consume"` wins; later handlers are not called f
 
 Two equivalent paths.
 
-### Typed import (recommended when you can depend on `@llblab/pi-telegram`)
+### Typed import (recommended when you can depend on `@xixiha5230/pi-telegram`)
 
 ```ts
-import { registerTelegramUpdateHandler } from "@llblab/pi-telegram/updates";
+import { registerTelegramUpdateHandler } from "@xixiha5230/pi-telegram/updates";
 
 const off = registerTelegramUpdateHandler(async (update, execution) => {
   const cb = (update as { callback_query?: { id?: string; data?: string } })
@@ -66,7 +66,7 @@ off();
 
 ### Zero-coupling globalThis lookup
 
-When the layered extension prefers no `import` from `@llblab/pi-telegram`, so load order between the two extensions does not matter and either can be installed first, it must implement the **full v1 registry contract**, not just `version` and `add`. pi-telegram's polling runtime calls `dispatch` on whatever object it finds at `globalThis.__piTelegramUpdateHandlerRegistry__`, so a partial object would silently break the first update.
+When the layered extension prefers no `import` from `@xixiha5230/pi-telegram`, so load order between the two extensions does not matter and either can be installed first, it must implement the **full v1 registry contract**, not just `version` and `add`. pi-telegram's polling runtime calls `dispatch` on whatever object it finds at `globalThis.__piTelegramUpdateHandlerRegistry__`, so a partial object would silently break the first update.
 
 pi-telegram defensively re-creates the registry if the object on `globalThis` is missing `add` or `dispatch`, validated as `version === 1`, `typeof add === "function"`, and `typeof dispatch === "function"`. Handlers registered against a malformed object are dropped — make sure your bootstrap implements all three fields.
 

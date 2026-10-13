@@ -498,7 +498,7 @@ The change is a control-plane generalization, not a rewrite:
 - **Repurpose**: the current leader becomes the daemon; the current follower becomes a worker. Leader election is removed from the external topology.
 - **Change**: `owners.json` transport ownership is already `cwd`-free after P0 and is shared by the extension leader and the daemon; `cwd`/`sessionId` become mutable worker attributes; session switching becomes an in-band worker transition; queue truth moves to the Pi runtime queue.
 - **Add**: `supervisor`, `worker registry`, directory-picker launch, the `/daemon` menu, `WorkerControlPort`, the RPC adapter, the extension UI bridge, and the `pi-telegram-daemon` entrypoint.
-- **Package shape**: `@llblab/pi-telegram` keeps the extension plus shared core; `pi-telegram-daemon` ships as a bin in the same package so versions stay aligned.
+- **Package shape**: `@xixiha5230/pi-telegram` keeps the extension plus shared core; `pi-telegram-daemon` ships as a bin in the same package so versions stay aligned.
 - **Backward compatibility**: standalone mode runs the embedded daemon and keeps today's single-instance behavior. The external daemon is an opt-in upgrade, not a migration requirement.
 
 ## Phasing

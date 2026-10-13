@@ -12,4 +12,4 @@ Follow `docs/voice.md`, `docs/inbound.md`, `docs/outbound.md`, and `docs/command
 
 Preserve unrelated `telegram.json` fields. Order matching handlers as fallbacks, require OGG/Opus for native voice, validate every stage before a live smoke test, and keep `voice.replyMode` unchanged unless the user requests a policy change. Explicit `telegram_voice` works in the default `manual` mode.
 
-When configuration is insufficient, use documented `@llblab/pi-telegram/*` package subpaths. Never import package-private `lib/*`, start another polling loop, bypass bridge ownership with raw Bot API access, or capture stale runtime state.
+When configuration is insufficient, use documented `@xixiha5230/pi-telegram/*` package subpaths. Never import package-private `lib/*`, start another polling loop, bypass bridge ownership with raw Bot API access, or capture stale runtime state.
